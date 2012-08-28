@@ -1,2 +1,3 @@
 CONFIG += qt debug
-SOURCES += mser.cpp QuadTree.cpp
+HEADERS += Pixel.h QuadTree.h
+SOURCES += mser.cpp Pixel.cpp QuadTree.cpp

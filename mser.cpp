@@ -6,12 +6,14 @@
 #include <QRgb>
 
 #include <assert.h>
+#include <algorithm>
 #include <iostream>
 #include <map>
 #include <stdlib.h>
 #include <unistd.h>
 
 using namespace std;
+using namespace mser;
 
 static char *opts = "d:";
 
@@ -45,13 +47,92 @@ int main(int argc, char *argv[]) {
   PixelVector *pixels = new PixelVector();
   pixels->reserve(width * height);
 
+  cerr << "Building pixels." << endl;
+
   for (int x = 0; x < width; ++x) {
     for (int y = 0; y < height; ++y) {
-      pixels->append(Pixel(QPoint(x, y), qGray(input.pixel(x, y))));
+      pixels->append(new Pixel(QPoint(x, y), qGray(input.pixel(x, y))));
     }
   }
 
+  cerr << "Sorting pixels." << endl;
+
   PixelVector *sortedPixels = Pixel::binSort(pixels);
+  delete pixels;
+  reverse(sortedPixels->begin(), sortedPixels->end());
+
+  // Find smallest containing power of two, brute force because we're expecting
+  // rather small pictures.
+  int quadtreeSize = 1;
+  while ((quadtreeSize < width) && (quadtreeSize < height)) {
+    quadtreeSize *= 2;
+  }
+
+  cerr << "Using quadtree of size " << quadtreeSize << "." << endl;
+
+  // TODO(hermannloose): Experiment with a sweet spot for the last two parameters.
+  QuadTree *qtree = new QuadTree(new QRect(0, 0, quadtreeSize, quadtreeSize), 20, 4);
+
+  QRect neighbourhood = QRect(0, 0, 3, 3);
+
+  // The root region of the whole region tree.
+  mser::Region *rootRegion;
+
+  for (PixelVector::iterator i = sortedPixels->begin(), e = sortedPixels->end(); i != e; ++i) {
+    Pixel *pixel = *i;
+
+    // Range check for 8-neighbourhood.
+    QPoint position = (*i)->position;
+    neighbourhood.moveTo(position.x() - 1, position.y() - 1);
+
+    PixelVector *neighbours = qtree->queryRange(&neighbourhood);
+
+    if (neighbours->isEmpty()) {
+      // Start a new region.
+      mser::Region *region = new mser::Region();
+      region->gray = pixel->gray;
+      pixel->region = region;
+      region->pixels->append(pixel);
+
+      rootRegion = region;
+    } else {
+      RegionSet *rootRegions = Pixel::getRootRegions(neighbours);
+
+      // Speculative new region.
+      mser::Region *region = new mser::Region();
+      region->gray = pixel->gray;
+
+      for (RegionSet::iterator ri = rootRegions->begin(), re = rootRegions->end();
+          ri != re; ++ri) {
+
+        if ((*ri)->gray < pixel->gray) {
+          (*ri)->parent = region;
+          region->children->insert(*ri);
+        } else {
+          // We've found a preexisting region for the same threshold, merge.
+          for (RegionSet::iterator ci = region->children->begin(), ce = region->children->end();
+              ci != ce; ++ci) {
+
+            (*ci)->parent = (*ri);
+            (*ri)->children->insert(*ci);
+            region = *ri;
+          }
+        }
+      }
+
+      pixel->region = region;
+      region->pixels->append(pixel);
+
+      rootRegion = region;
+    }
+
+    qtree->insert(pixel);
+  }
+
+  cerr << "Built region tree." << endl;
+
+
+
 
   QImage output(input);
 
@@ -70,6 +151,8 @@ int main(int argc, char *argv[]) {
     cerr << "(" << i->x() << ", " << i->y() << ") is in range." << endl;
   }
   */
+
+  cerr << "Saving output." << endl;
 
   // TODO(hermannloose): Let user choose filename, maybe append kernel size.
   if (!output.save("output.png")) {

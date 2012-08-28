@@ -1,24 +1,45 @@
 #pragma once
 
 #include <QPoint>
+#include <QSet>
 #include <QVector>
 
-class Pixel;
+namespace mser {
 
-typedef QVector<Pixel> PixelVector;
+  class Pixel;
+  class Region;
 
-class Pixel {
+  typedef QVector<Pixel*> PixelVector;
+  typedef QSet<Pixel*> PixelSet;
 
-  public:
-    Pixel();
-    Pixel(QPoint position, int gray);
+  typedef QSet<Region*> RegionSet;
 
-    QPoint getPosition();
-    int getGray();
+  class Pixel {
 
-    static PixelVector* binSort(PixelVector *original);
+    public:
+      Pixel();
+      Pixel(QPoint position, int gray);
 
-  private:
-    QPoint position;
-    int gray;
-};
+      QPoint position;
+      int gray;
+
+      Region *region;
+
+      Region* getRootRegion();
+
+      static PixelVector* binSort(PixelVector *original);
+      static RegionSet* getRootRegions(PixelVector *original);
+  };
+
+  class Region {
+    public:
+      Region();
+
+      int gray;
+      PixelVector *pixels;
+
+      Region *parent;
+      RegionSet *children;
+  };
+
+}

@@ -1,30 +1,37 @@
 #pragma once
 
+#include "Pixel.h"
+
 #include <QPoint>
 #include <QRect>
 #include <QVector>
 
-typedef QVector<QPoint> PointVector;
+namespace mser {
 
-class QuadTree {
+  class QuadTree {
 
-  public:
-    QuadTree(QRect *region, unsigned capacity);
+    public:
+      QuadTree(QRect *region, unsigned capacity, unsigned minDimension);
 
-    bool insert(QPoint point);
-    PointVector* queryRange(QRect range);
+      bool insert(Pixel *pixel);
+      PixelVector* queryRange(QRect *range);
 
-  private:
-    QRect *region;
-    PointVector *points;
-    unsigned capacity;
-    bool isLeaf;
+    private:
+      QRect *region;
+      PixelVector *points;
+      // Pixels per region / bucket.
+      unsigned capacity;
+      // Don't split below this size.
+      unsigned minDimension;
+      bool isLeaf;
 
-    QuadTree *northWest;
-    QuadTree *northEast;
-    QuadTree *southWest;
-    QuadTree *southEast;
+      QuadTree *northWest;
+      QuadTree *northEast;
+      QuadTree *southWest;
+      QuadTree *southEast;
 
-    void dump();
-    void subdivide();
-};
+      void dump();
+      void subdivide();
+  };
+
+}

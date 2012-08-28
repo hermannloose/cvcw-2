@@ -7,115 +7,160 @@
 
 using namespace std;
 
-QuadTree::QuadTree(QRect *region, unsigned capacity) {
-  this->region = region;
+namespace mser {
 
-  points = new PointVector();
-  points->reserve(capacity);
-  this->capacity = capacity;
+  QuadTree::QuadTree(QRect *region, unsigned capacity, unsigned minDimension) {
+    this->region = region;
 
-  isLeaf = true;
-}
+    points = new PixelVector();
+    points->reserve(capacity);
+    this->capacity = capacity;
+    this->minDimension = minDimension;
 
-bool QuadTree::insert(QPoint point) {
-  if (!region->contains(point)) {
+    isLeaf = true;
+  }
+
+  bool QuadTree::insert(Pixel *pixel) {
+    if (!region->contains(pixel->position)) {
+      return false;
+    }
+
+    if (isLeaf) {
+      if ((points->size() < capacity) || (capacity == 0)) {
+        /*
+        cerr << "Inserting (" << pixel->getPosition().x() << ", " << pixel->getPosition().y()
+            << ") in " << "[" << region->left() << ", " << region->top() << ", " << region->right()
+            << ", " << region->bottom() << "]." << endl;
+            */
+
+        points->append(pixel);
+        return true;
+      } else {
+        subdivide();
+        return this->insert(pixel);
+      }
+    } else {
+      if (northWest->insert(pixel)) { return true; }
+      if (northEast->insert(pixel)) { return true; }
+      if (southWest->insert(pixel)) { return true; }
+      if (southEast->insert(pixel)) { return true; }
+    }
+
+    // This should never happen.
     return false;
   }
 
-  if (isLeaf) {
-    if ((points->size() < capacity) || (capacity == 0)) {
-      cerr << "Inserting (" << point.x() << ", " << point.y() << ") in "
-          << "[" << region->left() << ", " << region->top() << ", " << region->right() << ", "
-          << region->bottom() << "]." << endl;
+  PixelVector* QuadTree::queryRange(QRect *range) {
+    PixelVector *inRange = new PixelVector();
 
-      points->append(point);
-      return true;
-    } else {
-      subdivide();
-      return this->insert(point);
+    if (!region->intersects(*range)) {
+      return inRange;
     }
-  } else {
-    if (northWest->insert(point)) { return true; }
-    if (northEast->insert(point)) { return true; }
-    if (southWest->insert(point)) { return true; }
-    if (southEast->insert(point)) { return true; }
-  }
 
-  // This should never happen.
-  return false;
-}
+    if (isLeaf) {
+      for (PixelVector::iterator i = points->begin(), e = points->end(); i != e; ++i) {
+        if (range->contains((*i)->position)) {
+          inRange->append(*i);
+        }
+      }
+    } else {
+      PixelVector *nwRange = northWest->queryRange(range);
+      if (!nwRange->isEmpty()) {
+        (*inRange) << *nwRange;
+      }
 
-PointVector* QuadTree::queryRange(QRect range) {
-  PointVector *inRange = new PointVector();
+      PixelVector *neRange = northEast->queryRange(range);
+      if (!nwRange->isEmpty()) {
+        (*inRange) << *neRange;
+      }
 
-  if (!region->intersects(range)) {
+      PixelVector *swRange = southWest->queryRange(range);
+      if (!nwRange->isEmpty()) {
+        (*inRange) << *swRange;
+      }
+
+      PixelVector *seRange = southEast->queryRange(range);
+      if (!nwRange->isEmpty()) {
+        (*inRange) << *seRange;
+      }
+
+      /*
+      (*inRange) << *(northWest->queryRange(range));
+      (*inRange) << *(northEast->queryRange(range));
+      (*inRange) << *(southWest->queryRange(range));
+      (*inRange) << *(southEast->queryRange(range));
+      */
+    }
+
     return inRange;
   }
 
-  if (isLeaf) {
-    for (PointVector::iterator i = points->begin(), e = points->end(); i != e; ++i) {
-      if (range.contains(*i)) {
-        inRange->append(*i);
-      }
+  void QuadTree::dump() {
+    cerr << "[" << region->left() << ", " << region->top() << ", " << region->right() << ", "
+        << region->bottom() << "]." << endl;
+  }
+
+  void QuadTree::subdivide() {
+    /*
+    cerr << "Subdividing ";
+    dump();
+    */
+
+    if ((region->width() <= minDimension) && (region->height() <= minDimension)) {
+      /*
+      cerr << "Region can't be divided anymore, setting to unlimited capacity." << endl;
+      */
+      capacity = 0;
+      return;
     }
-  } else {
-    (*inRange) << *(northWest->queryRange(range));
-    (*inRange) << *(northEast->queryRange(range));
-    (*inRange) << *(southWest->queryRange(range));
-    (*inRange) << *(southEast->queryRange(range));
+
+
+    isLeaf = false;
+
+    QPoint center = region->center();
+    unsigned splitWidth = region->width() / 2;
+    unsigned splitHeight = region->height() / 2;
+
+    northWest = new QuadTree(
+        new QRect(region->left(), region->top(), splitWidth, splitHeight), capacity,
+        minDimension);
+
+    /*
+    cerr << "NW ";
+    northWest->dump();
+    */
+
+    northEast = new QuadTree(
+        new QRect(center.x() + 1, region->top(), splitWidth, splitHeight), capacity,
+        minDimension);
+
+    /*
+    cerr << "NE ";
+    northEast->dump();
+    */
+
+    southWest = new QuadTree(
+        new QRect(region->left(), center.y() + 1, splitWidth, splitHeight), capacity,
+        minDimension);
+
+    /*
+    cerr << "SW ";
+    southWest->dump();
+    */
+
+    southEast = new QuadTree(
+        new QRect(center.x() + 1, center.y() + 1, splitWidth, splitHeight), capacity,
+        minDimension);
+
+    /*
+    cerr << "SE ";
+    southEast->dump();
+    */
+
+    for (PixelVector::iterator i = points->begin(), e = points->end(); i != e; ++i) {
+      this->insert(*i);
+    }
+    delete points;
   }
 
-  return inRange;
-}
-
-void QuadTree::dump() {
-  cerr << "[" << region->left() << ", " << region->top() << ", " << region->right() << ", "
-      << region->bottom() << "]." << endl;
-}
-
-void QuadTree::subdivide() {
-  cerr << "Subdividing ";
-  dump();
-
-  if ((region->width() < 2) && (region->height() < 2)) {
-    cerr << "Region can't be divided anymore, setting to unlimited capacity." << endl;
-    capacity = 0;
-    return;
-  }
-
-
-  isLeaf = false;
-
-  QPoint center = region->center();
-  unsigned splitWidth = region->width() / 2;
-  unsigned splitHeight = region->height() / 2;
-
-  northWest = new QuadTree(
-      new QRect(region->left(), region->top(), splitWidth, splitHeight), capacity);
-
-  cerr << "NW ";
-  northWest->dump();
-
-  northEast = new QuadTree(
-      new QRect(center.x() + 1, region->top(), splitWidth, splitHeight), capacity);
-
-  cerr << "NE ";
-  northEast->dump();
-
-  southWest = new QuadTree(
-      new QRect(region->left(), center.y() + 1, splitWidth, splitHeight), capacity);
-
-  cerr << "SW ";
-  southWest->dump();
-
-  southEast = new QuadTree(
-      new QRect(center.x() + 1, center.y() + 1, splitWidth, splitHeight), capacity);
-
-  cerr << "SE ";
-  southEast->dump();
-
-  for (PointVector::iterator i = points->begin(), e = points->end(); i != e; ++i) {
-    this->insert(*i);
-  }
-  delete points;
 }

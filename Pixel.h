@@ -37,6 +37,7 @@ namespace mser {
 
       int gray;
       PixelVector *pixels;
+      int size;
 
       Region *parent;
       RegionSet *children;

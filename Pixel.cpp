@@ -62,7 +62,8 @@ namespace mser {
 
   Region::Region() :
       gray(0),
-      parent(0) {
+      parent(0),
+      size(0) {
 
     pixels = new PixelVector();
     children = new RegionSet();

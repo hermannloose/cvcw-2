@@ -1,6 +1,7 @@
 #include "Pixel.h"
 #include "QuadTree.h"
 
+#include <QColor>
 #include <QImage>
 #include <QPoint>
 #include <QRgb>
@@ -16,6 +17,10 @@ using namespace std;
 using namespace mser;
 
 static char *opts = "d:";
+
+RegionSet* walkRegions(mser::Region *current, mser::Region *lower, mser::Region *upper);
+
+void mergeRegions(mser::Region *merge, mser::Region *into);
 
 int main(int argc, char *argv[]) {
   short delta = 5;
@@ -34,15 +39,18 @@ int main(int argc, char *argv[]) {
   // TODO(hermannloose): Let user choose which file to work on.
   QImage input("input.png");
 
+  /*
   if (!input.isGrayscale()) {
     cerr << "Image isn't grayscale, aborting." << endl;
     exit(1);
   }
+  */
 
   int width = input.width();
   int height = input.height();
 
   cerr << "Got image [" << width << "x" << height <<"]." << endl;
+  cerr << "Using delta of " << delta << "." << endl;
 
   PixelVector *pixels = new PixelVector();
   pixels->reserve(width * height);
@@ -52,6 +60,7 @@ int main(int argc, char *argv[]) {
   for (int x = 0; x < width; ++x) {
     for (int y = 0; y < height; ++y) {
       pixels->append(new Pixel(QPoint(x, y), qGray(input.pixel(x, y))));
+      //cerr << "[" << x << ", " << y << "] = " << qGray(input.pixel(x, y)) << endl;
     }
   }
 
@@ -75,9 +84,9 @@ int main(int argc, char *argv[]) {
 
   QRect neighbourhood = QRect(0, 0, 3, 3);
 
-  // The root region of the whole region tree.
-  mser::Region *rootRegion;
+  RegionSet *regionLeaves = new RegionSet();
 
+  int pixelsWithNeighbours = 0;
   for (PixelVector::iterator i = sortedPixels->begin(), e = sortedPixels->end(); i != e; ++i) {
     Pixel *pixel = *i;
 
@@ -93,9 +102,15 @@ int main(int argc, char *argv[]) {
       region->gray = pixel->gray;
       pixel->region = region;
       region->pixels->append(pixel);
+      region->size = 1;
 
-      rootRegion = region;
+      regionLeaves->insert(region);
     } else {
+      /*
+      cerr << "(" << ++pixelsWithNeighbours << ") " << pixel << " connecting "
+          << neighbours->size() << endl;
+          */
+
       RegionSet *rootRegions = Pixel::getRootRegions(neighbours);
 
       // Speculative new region.
@@ -105,25 +120,22 @@ int main(int argc, char *argv[]) {
       for (RegionSet::iterator ri = rootRegions->begin(), re = rootRegions->end();
           ri != re; ++ri) {
 
-        if ((*ri)->gray < pixel->gray) {
+        if ((*ri)->gray > pixel->gray) {
           (*ri)->parent = region;
           region->children->insert(*ri);
+          region->size += (*ri)->size;
         } else {
+          assert((*ri)->gray == pixel->gray);
           // We've found a preexisting region for the same threshold, merge.
-          for (RegionSet::iterator ci = region->children->begin(), ce = region->children->end();
-              ci != ce; ++ci) {
-
-            (*ci)->parent = (*ri);
-            (*ri)->children->insert(*ci);
-            region = *ri;
-          }
+          mergeRegions(region, *ri);
+          //delete region;
+          region = *ri;
         }
       }
 
       pixel->region = region;
       region->pixels->append(pixel);
-
-      rootRegion = region;
+      region->size += 1;
     }
 
     qtree->insert(pixel);
@@ -131,26 +143,60 @@ int main(int argc, char *argv[]) {
 
   cerr << "Built region tree." << endl;
 
-
-
-
   QImage output(input);
 
-  /*
-  QuadTree *qtree = new QuadTree(new QRect(0, 0, 1024, 1024), 3);
-  qtree->insert(QPoint(1, 1));
-  qtree->insert(QPoint(19, 27));
-  qtree->insert(QPoint(3, 252));
-  qtree->insert(QPoint(783, 19));
-  qtree->insert(QPoint(3, 2));
-  qtree->insert(QPoint(1, 0));
-  qtree->insert(QPoint(7, 12));
+  cerr << "Examining " << regionLeaves->size() << " leaf regions." << endl;
 
-  PointVector *inRange = qtree->queryRange(QRect(0, 0, 32, 32));
-  for (PointVector::iterator i = inRange->begin(), e = inRange->end(); i != e; ++i) {
-    cerr << "(" << i->x() << ", " << i->y() << ") is in range." << endl;
+  for (RegionSet::iterator i = regionLeaves->begin(), e = regionLeaves->end(); i != e; ++i) {
+    if ((*i)->size > 1) {
+      cerr << "size: " << (*i)->size << "; ";
+    }
+    mser::Region *current = *i;
+    mser::Region *lower = *i;
+    mser::Region *upper = *i;
+    bool failedToSpan = false;
+
+    for (int x = 0; x < delta; ++x) {
+      if (current->parent) {
+        current = current->parent;
+      } else {
+        //cerr << x;
+        failedToSpan = true;
+        break;
+      }
+    }
+
+    for (int x = 0; x < delta * 2; ++x) {
+      if (upper->parent) {
+        upper = upper->parent;
+      } else {
+        //cerr << x;
+        failedToSpan = true;
+        break;
+      }
+    }
+
+    if (failedToSpan) {
+      continue;
+    } else {
+      //cerr << endl;
+    }
+
+    RegionSet *regionsFound = walkRegions(current, lower, upper);
+
+    cerr << "Found " << regionsFound->size() << " regions for starting region "
+        << lower << "." << endl;
+
+    for (RegionSet::iterator fi = regionsFound->begin(), fe = regionsFound->end();
+        fi != fe; ++fi) {
+
+      for (PixelVector::iterator pi = (*fi)->pixels->begin(), pe = (*fi)->pixels->end();
+          pi != pe; ++pi) {
+
+        output.setPixel((*pi)->position, 0xffff0000);
+      }
+    }
   }
-  */
 
   cerr << "Saving output." << endl;
 
@@ -160,4 +206,51 @@ int main(int argc, char *argv[]) {
   }
 
   return 0;
+}
+
+inline void mergeRegions(mser::Region *merge, mser::Region *into) {
+  assert(merge && into);
+  assert(merge->gray == into->gray);
+
+  for (RegionSet::iterator i = merge->children->begin(), e = merge->children->end();
+      i != e; ++i) {
+    (*i)->parent = into;
+    into->children->insert(*i);
+  }
+
+  into->size += merge->size;
+  *(into->pixels) << *(merge->pixels);
+}
+
+RegionSet* walkRegions(mser::Region *current, mser::Region *lower,
+    mser::Region *upper) {
+
+  RegionSet *regionsFound = new RegionSet();
+  mser::Region *lastRegion;
+
+  double minqi = 1000000;
+  double qi = 1000000;
+
+  while (upper != NULL) {
+    qi = (double) (upper->size - lower->size) / (double) current->size;
+
+    cerr << "qi: " << qi << endl;
+
+    if (qi >= minqi) {
+      regionsFound->insert(lastRegion);
+    } else {
+      minqi = qi;
+      lastRegion = current;
+    }
+
+    current = current->parent;
+    lower = lower->parent;
+    upper = upper->parent;
+  }
+
+  if (qi == minqi) {
+    regionsFound->insert(lastRegion);
+  }
+
+  return regionsFound;
 }

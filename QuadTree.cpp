@@ -3,6 +3,7 @@
 #include <QPoint>
 #include <QRect>
 
+#include <assert.h>
 #include <iostream>
 
 using namespace std;
@@ -47,49 +48,62 @@ namespace mser {
     }
 
     // This should never happen.
-    return false;
+    assert(false && "Could not insert into quadtree!");
   }
 
   PixelVector* QuadTree::queryRange(QRect *range) {
     PixelVector *inRange = new PixelVector();
 
     if (!region->intersects(*range)) {
+      /*
+      cerr << "Checked for [" << range->left() << ", " << range->top() << ", " << range->right()
+          << ", " << range->bottom() << "] intersecting with ";
+      dump();
+      cerr << "Does not intersect." << endl;
+      */
+      cerr << "Queried for non-intersecting range, shouldn't happen!" << endl;
       return inRange;
     }
 
-    if (isLeaf) {
-      for (PixelVector::iterator i = points->begin(), e = points->end(); i != e; ++i) {
-        if (range->contains((*i)->position)) {
-          inRange->append(*i);
+    for (PixelVector::iterator i = points->begin(), e = points->end(); i != e; ++i) {
+      if (range->contains((*i)->position)) {
+        //cerr << "(" << (*i)->position.x() << "," << (*i)->position.y() << ") in range." << endl;
+        inRange->append(*i);
+      }
+    }
+
+    if (!isLeaf) {
+      if (northWest->region->intersects(*range)) {
+        PixelVector *nwRange = northWest->queryRange(range);
+        if (!nwRange->isEmpty()) {
+          (*inRange) << *nwRange;
         }
-      }
-    } else {
-      PixelVector *nwRange = northWest->queryRange(range);
-      if (!nwRange->isEmpty()) {
-        (*inRange) << *nwRange;
+        delete nwRange;
       }
 
-      PixelVector *neRange = northEast->queryRange(range);
-      if (!nwRange->isEmpty()) {
-        (*inRange) << *neRange;
+      if (northEast->region->intersects(*range)) {
+        PixelVector *neRange = northEast->queryRange(range);
+        if (!neRange->isEmpty()) {
+          (*inRange) << *neRange;
+        }
+        delete neRange;
       }
 
-      PixelVector *swRange = southWest->queryRange(range);
-      if (!nwRange->isEmpty()) {
-        (*inRange) << *swRange;
+      if (southWest->region->intersects(*range)) {
+        PixelVector *swRange = southWest->queryRange(range);
+        if (!swRange->isEmpty()) {
+          (*inRange) << *swRange;
+        }
+        delete swRange;
       }
 
-      PixelVector *seRange = southEast->queryRange(range);
-      if (!nwRange->isEmpty()) {
-        (*inRange) << *seRange;
+      if (southEast->region->intersects(*range)) {
+        PixelVector *seRange = southEast->queryRange(range);
+        if (!seRange->isEmpty()) {
+          (*inRange) << *seRange;
+        }
+        delete seRange;
       }
-
-      /*
-      (*inRange) << *(northWest->queryRange(range));
-      (*inRange) << *(northEast->queryRange(range));
-      (*inRange) << *(southWest->queryRange(range));
-      (*inRange) << *(southEast->queryRange(range));
-      */
     }
 
     return inRange;
@@ -113,7 +127,6 @@ namespace mser {
       capacity = 0;
       return;
     }
-
 
     isLeaf = false;
 
@@ -156,11 +169,6 @@ namespace mser {
     cerr << "SE ";
     southEast->dump();
     */
-
-    for (PixelVector::iterator i = points->begin(), e = points->end(); i != e; ++i) {
-      this->insert(*i);
-    }
-    delete points;
   }
 
 }

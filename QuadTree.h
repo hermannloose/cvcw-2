@@ -11,13 +11,14 @@ namespace mser {
   class QuadTree {
 
     public:
+      QRect *region;
+
       QuadTree(QRect *region, unsigned capacity, unsigned minDimension);
 
       bool insert(Pixel *pixel);
       PixelVector* queryRange(QRect *range);
 
     private:
-      QRect *region;
       PixelVector *points;
       // Pixels per region / bucket.
       unsigned capacity;

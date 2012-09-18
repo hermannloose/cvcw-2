@@ -19,7 +19,7 @@
 using namespace std;
 using namespace mser;
 
-static char *opts = "d";
+static char *opts = "d:";
 
 RegionSet* walkRegions(mser::Region *current, mser::Region *lower, mser::Region *upper,
     double minqi, bool lastWasMin);
@@ -120,7 +120,7 @@ int main(int argc, char *argv[]) {
           ri != re; ++ri) {
 
         if ((*ri)->gray > pixel->gray) {
-          // Brighter regions grouped under this one.
+          // Brighter regions to be grouped under this one.
           (*ri)->parent = region;
           region->children->insert(*ri);
           region->size += (*ri)->size;
@@ -160,45 +160,30 @@ int main(int argc, char *argv[]) {
   QImage output(input);
 
   for (RegionSet::iterator i = regionLeaves->begin(), e = regionLeaves->end(); i != e; ++i) {
-    cerr << "Setting up region walk." << endl;
+    cerr << "Setting up region walk for region " << *i << "." << endl;
 
     mser::Region *current = *i;
     mser::Region *lower = *i;
     mser::Region *upper = *i;
     bool failedToSpan = false;
 
-    // FIXME(hermannloose): Some weird GPF errors somewhere around here.
-    assert(current);
-    assert(lower);
-    assert(upper);
-
     for (int x = 0; x < delta; ++x) {
       if (current->parent) {
         current = current->parent;
       } else {
-        cerr << x;
         failedToSpan = true;
         break;
       }
     }
-
-    assert(current);
-    assert(lower);
-    assert(upper);
 
     for (int x = 0; x < delta * 2; ++x) {
       if (upper->parent) {
         upper = upper->parent;
       } else {
-        cerr << x;
         failedToSpan = true;
         break;
       }
     }
-
-    assert(current);
-    assert(lower);
-    assert(upper);
 
     if (failedToSpan) {
       cerr << "Failed to span." << endl;
@@ -210,15 +195,22 @@ int main(int argc, char *argv[]) {
     cerr << "Walking regions." << endl;
 
     // FIXME(hermannloose): Last two arguments are bogus.
-    RegionSet *regionsFound = walkRegions(current, lower, upper, 0, false);
+    RegionSet *regionsFound = walkRegions(current, lower, upper, 1, false);
 
     cerr << "Found " << regionsFound->size() << " regions for starting region "
         << lower << "." << endl;
 
-    for (RegionSet::iterator fi = regionsFound->begin(), fe = regionsFound->end();
-        fi != fe; ++fi) {
+    while (!regionsFound->isEmpty()) {
+      RegionSet::iterator first = regionsFound->begin();
+      regionsFound->remove(*first);
 
-      for (PixelVector::iterator pi = (*fi)->pixels->begin(), pe = (*fi)->pixels->end();
+      for (RegionSet::iterator fi = (*first)->children->begin(), fe = (*first)->children->end();
+          fi != fe; ++fi) {
+
+        regionsFound->insert(*fi);
+      }
+
+      for (PixelVector::iterator pi = (*first)->pixels->begin(), pe = (*first)->pixels->end();
           pi != pe; ++pi) {
 
         output.setPixel((*pi)->x, (*pi)->y, 0xffff0000);
@@ -256,66 +248,61 @@ inline void mergeRegions(mser::Region *merge, mser::Region *into) {
   into->size += merge->size;
 }
 
-inline bool branch(mser::Region *region) {
-  return (region->children->size() < 2);
-}
-
 RegionSet* walkRegions(mser::Region *current, mser::Region *lower,
     mser::Region *upper, double lastqi, bool lastWasMin) {
 
-  bool finished = false;
-
   RegionSet *regionsFound = new RegionSet();
-  mser::Region *lastRegion;
+  mser::Region *lastRegion = current->parent;
 
-  double qi = lastqi;
+  double qi;
 
-  // FIXME(hermannloose): This bit is rubbish and needs to be sorted out.
+  while (true) {
+    qi = ((double) (upper->size - lower->size)) / ((double) current->size);
 
-  while (!finished) {
+    if (lastWasMin && (qi > lastqi)) {
+      cerr << "Found minimum!" << endl;
+      regionsFound->insert(lastRegion);
+      lastWasMin = false;
+    }
 
-    //while (!branch(current) && (!branch(lower) && !branch(upper))) {
-      if (!lower->children->isEmpty()) {
-        lower = *(lower->children->begin());
-        current = *(current->children->begin());
-        upper = *(upper->children->begin());
+    if (qi < lastqi) {
+      lastWasMin = true;
+      lastRegion = current;
+    }
 
-        qi = ((double) (upper->size - lower->size)) / ((double) current->size);
-        if (lastWasMin && (qi > lastqi)) {
-          regionsFound->insert(lastRegion);
-        // CALCULATE
-        } else {
-          finished = true;
-          break;
-        }
+    // Find branches taken further up, if upper & current are branching too.
+    mser::Region *nextCurrent = lower;
+    while (nextCurrent->parent != current) {
+      nextCurrent = nextCurrent->parent;
+    }
+    current = nextCurrent;
+
+    mser::Region *nextUpper = lower;
+    while (nextUpper->parent != upper) {
+      nextUpper = nextUpper->parent;
+    }
+    upper = nextUpper;
+
+    // Reached a leaf or branching.
+    if (lower->children->isEmpty() || lower->children->size() > 1) {
+      for (RegionSet::iterator lci = lower->children->begin(), lce = lower->children->end();
+          lci != lce; ++lci) {
+
+        RegionSet *branchedFound = walkRegions(current, *lci, upper, lastqi, lastWasMin);
+        regionsFound->unite(*branchedFound);
+        delete branchedFound;
       }
 
-      // Find branches taken further up, if upper & current are branching too.
-      mser::Region *nextCurrent = lower;
-      while (nextCurrent->parent != current) {
-        nextCurrent = nextCurrent->parent;
+      // Ugly control flow, I know.
+      if (lower->children->isEmpty() && lastWasMin) {
+        cerr << "Leaf reached." << endl;
+        regionsFound->insert(lastRegion);
       }
-      current = nextCurrent;
-
-      mser::Region *nextUpper = lower;
-      while (nextUpper->parent != upper) {
-        nextUpper = nextUpper->parent;
-      }
-      upper = nextUpper;
-
-      if (branch(lower)) {
-        for (RegionSet::iterator lci = lower->children->begin(), lce = lower->children->end();
-            lci != lce; ++lci) {
-
-          // FIXME(hermannloose): Last argument is bogus.
-          RegionSet *branchedFound = walkRegions(current, *lci, upper, lastqi, false);
-          regionsFound->unite(*branchedFound);
-          delete branchedFound;
-        }
-        finished = true;
-      }
-
-    //}
+      // Finished.
+      break;
+    } else {
+      lower = *(lower->children->begin());
+    }
   }
 
   return regionsFound;

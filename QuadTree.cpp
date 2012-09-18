@@ -22,7 +22,7 @@ namespace mser {
   }
 
   bool QuadTree::insert(Pixel *pixel) {
-    if (!region->contains(pixel->position)) {
+    if (!region->contains(pixel->x, pixel->y)) {
       return false;
     }
 
@@ -66,7 +66,7 @@ namespace mser {
     }
 
     for (PixelVector::iterator i = points->begin(), e = points->end(); i != e; ++i) {
-      if (range->contains((*i)->position)) {
+      if (range->contains((*i)->x, (*i)->y)) {
         //cerr << "(" << (*i)->position.x() << "," << (*i)->position.y() << ") in range." << endl;
         inRange->append(*i);
       }

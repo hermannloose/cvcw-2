@@ -8,16 +8,16 @@ using namespace std;
 namespace mser {
 
   Pixel::Pixel() :
-      position(QPoint(0, 0)),
       gray(0),
       region(0) {
   }
 
   Pixel::Pixel(QPoint position, int gray) :
-      position(position),
       gray(gray),
       region(0) {
 
+    x = position.x();
+    y = position.y();
   }
 
   Region* Pixel::getRootRegion() {
@@ -62,11 +62,16 @@ namespace mser {
 
   Region::Region() :
       gray(0),
-      parent(0),
-      size(0) {
+      size(0),
+      parent(0) {
 
     pixels = new PixelVector();
     children = new RegionSet();
+  }
+
+  Region::~Region() {
+    delete pixels;
+    delete children;
   }
 
 }

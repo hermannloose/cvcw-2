@@ -20,8 +20,9 @@ namespace mser {
       Pixel();
       Pixel(QPoint position, int gray);
 
-      QPoint position;
-      int gray;
+      unsigned short x;
+      unsigned short y;
+      unsigned char gray;
 
       Region *region;
 
@@ -34,8 +35,9 @@ namespace mser {
   class Region {
     public:
       Region();
+      ~Region();
 
-      int gray;
+      unsigned char gray;
       PixelVector *pixels;
       int size;
 

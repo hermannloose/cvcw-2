@@ -1,29 +1,35 @@
 #include "Pixel.h"
+#include "PixelImage.h"
 #include "QuadTree.h"
 
 #include <QColor>
 #include <QImage>
 #include <QPoint>
 #include <QRgb>
+#include <QStringBuilder>
 
 #include <assert.h>
 #include <algorithm>
 #include <iostream>
 #include <map>
 #include <stdlib.h>
+#include <string>
 #include <unistd.h>
 
 using namespace std;
 using namespace mser;
 
-static char *opts = "d:";
+static char *opts = "d";
 
-RegionSet* walkRegions(mser::Region *current, mser::Region *lower, mser::Region *upper);
+RegionSet* walkRegions(mser::Region *current, mser::Region *lower, mser::Region *upper,
+    double minqi, bool lastWasMin);
 
 void mergeRegions(mser::Region *merge, mser::Region *into);
 
 int main(int argc, char *argv[]) {
   short delta = 5;
+  string *inputFilename;
+  string *outputFilename;
 
   char c;
   while ((c = getopt(argc, argv, opts)) != -1) {
@@ -36,8 +42,22 @@ int main(int argc, char *argv[]) {
     }
   }
 
+  if (optind < argc) {
+    inputFilename = new string(argv[optind]);
+  } else {
+    inputFilename = new string("input.png");
+  }
+
+  ++optind;
+
+  if (optind < argc) {
+    outputFilename = new string(argv[optind]);
+  } else {
+    outputFilename = new string("output.png");
+  }
+
   // TODO(hermannloose): Let user choose which file to work on.
-  QImage input("input.png");
+  QImage input(inputFilename->c_str());
 
   /*
   if (!input.isGrayscale()) {
@@ -69,32 +89,18 @@ int main(int argc, char *argv[]) {
   PixelVector *sortedPixels = Pixel::binSort(pixels);
   delete pixels;
   reverse(sortedPixels->begin(), sortedPixels->end());
+  int darkest = sortedPixels->at(0)->gray;
 
-  // Find smallest containing power of two, brute force because we're expecting
-  // rather small pictures.
-  int quadtreeSize = 1;
-  while ((quadtreeSize < width) && (quadtreeSize < height)) {
-    quadtreeSize *= 2;
-  }
+  cerr << "Placing pixels." << endl;
 
-  cerr << "Using quadtree of size " << quadtreeSize << "." << endl;
-
-  // TODO(hermannloose): Experiment with a sweet spot for the last two parameters.
-  QuadTree *qtree = new QuadTree(new QRect(0, 0, quadtreeSize, quadtreeSize), 20, 4);
-
-  QRect neighbourhood = QRect(0, 0, 3, 3);
-
+  PixelImage *pimage = new PixelImage(width, height);
   RegionSet *regionLeaves = new RegionSet();
 
   int pixelsWithNeighbours = 0;
   for (PixelVector::iterator i = sortedPixels->begin(), e = sortedPixels->end(); i != e; ++i) {
     Pixel *pixel = *i;
 
-    // Range check for 8-neighbourhood.
-    QPoint position = (*i)->position;
-    neighbourhood.moveTo(position.x() - 1, position.y() - 1);
-
-    PixelVector *neighbours = qtree->queryRange(&neighbourhood);
+    PixelVector *neighbours = pimage->neighbours(*i);
 
     if (neighbours->isEmpty()) {
       // Start a new region.
@@ -103,14 +109,7 @@ int main(int argc, char *argv[]) {
       pixel->region = region;
       region->pixels->append(pixel);
       region->size = 1;
-
-      regionLeaves->insert(region);
     } else {
-      /*
-      cerr << "(" << ++pixelsWithNeighbours << ") " << pixel << " connecting "
-          << neighbours->size() << endl;
-          */
-
       RegionSet *rootRegions = Pixel::getRootRegions(neighbours);
 
       // Speculative new region.
@@ -121,6 +120,7 @@ int main(int argc, char *argv[]) {
           ri != re; ++ri) {
 
         if ((*ri)->gray > pixel->gray) {
+          // Brighter regions grouped under this one.
           (*ri)->parent = region;
           region->children->insert(*ri);
           region->size += (*ri)->size;
@@ -128,7 +128,12 @@ int main(int argc, char *argv[]) {
           assert((*ri)->gray == pixel->gray);
           // We've found a preexisting region for the same threshold, merge.
           mergeRegions(region, *ri);
-          //delete region;
+
+          if (pixel->gray == darkest) {
+            regionLeaves->remove(region);
+          }
+          delete region;
+
           region = *ri;
         }
       }
@@ -136,53 +141,76 @@ int main(int argc, char *argv[]) {
       pixel->region = region;
       region->pixels->append(pixel);
       region->size += 1;
+
+      delete rootRegions;
     }
 
-    qtree->insert(pixel);
+    pimage->insert(pixel);
+
+    if (pixel->gray == darkest) {
+      regionLeaves->insert(pixel->region);
+    }
+
+    delete neighbours;
   }
 
   cerr << "Built region tree." << endl;
+  cerr << "Got " << regionLeaves->size() << " regions with the darkest shade." << endl;
 
   QImage output(input);
 
-  cerr << "Examining " << regionLeaves->size() << " leaf regions." << endl;
-
   for (RegionSet::iterator i = regionLeaves->begin(), e = regionLeaves->end(); i != e; ++i) {
-    if ((*i)->size > 1) {
-      cerr << "size: " << (*i)->size << "; ";
-    }
+    cerr << "Setting up region walk." << endl;
+
     mser::Region *current = *i;
     mser::Region *lower = *i;
     mser::Region *upper = *i;
     bool failedToSpan = false;
 
+    // FIXME(hermannloose): Some weird GPF errors somewhere around here.
+    assert(current);
+    assert(lower);
+    assert(upper);
+
     for (int x = 0; x < delta; ++x) {
       if (current->parent) {
         current = current->parent;
       } else {
-        //cerr << x;
+        cerr << x;
         failedToSpan = true;
         break;
       }
     }
+
+    assert(current);
+    assert(lower);
+    assert(upper);
 
     for (int x = 0; x < delta * 2; ++x) {
       if (upper->parent) {
         upper = upper->parent;
       } else {
-        //cerr << x;
+        cerr << x;
         failedToSpan = true;
         break;
       }
     }
 
+    assert(current);
+    assert(lower);
+    assert(upper);
+
     if (failedToSpan) {
+      cerr << "Failed to span." << endl;
       continue;
     } else {
       //cerr << endl;
     }
 
-    RegionSet *regionsFound = walkRegions(current, lower, upper);
+    cerr << "Walking regions." << endl;
+
+    // FIXME(hermannloose): Last two arguments are bogus.
+    RegionSet *regionsFound = walkRegions(current, lower, upper, 0, false);
 
     cerr << "Found " << regionsFound->size() << " regions for starting region "
         << lower << "." << endl;
@@ -193,15 +221,16 @@ int main(int argc, char *argv[]) {
       for (PixelVector::iterator pi = (*fi)->pixels->begin(), pe = (*fi)->pixels->end();
           pi != pe; ++pi) {
 
-        output.setPixel((*pi)->position, 0xffff0000);
+        output.setPixel((*pi)->x, (*pi)->y, 0xffff0000);
       }
     }
+
+    delete regionsFound;
   }
 
   cerr << "Saving output." << endl;
 
-  // TODO(hermannloose): Let user choose filename, maybe append kernel size.
-  if (!output.save("output.png")) {
+  if (!output.save(outputFilename->c_str())) {
     cerr << "Couldn't save image!" << endl;
   }
 
@@ -218,38 +247,75 @@ inline void mergeRegions(mser::Region *merge, mser::Region *into) {
     into->children->insert(*i);
   }
 
+  for (PixelVector::iterator i = merge->pixels->begin(), e = merge->pixels->end();
+      i != e; ++i) {
+    (*i)->region = into;
+    into->pixels->append(*i);
+  }
+
   into->size += merge->size;
-  *(into->pixels) << *(merge->pixels);
+}
+
+inline bool branch(mser::Region *region) {
+  return (region->children->size() < 2);
 }
 
 RegionSet* walkRegions(mser::Region *current, mser::Region *lower,
-    mser::Region *upper) {
+    mser::Region *upper, double lastqi, bool lastWasMin) {
+
+  bool finished = false;
 
   RegionSet *regionsFound = new RegionSet();
   mser::Region *lastRegion;
 
-  double minqi = 1000000;
-  double qi = 1000000;
+  double qi = lastqi;
 
-  while (upper != NULL) {
-    qi = (double) (upper->size - lower->size) / (double) current->size;
+  // FIXME(hermannloose): This bit is rubbish and needs to be sorted out.
 
-    cerr << "qi: " << qi << endl;
+  while (!finished) {
 
-    if (qi >= minqi) {
-      regionsFound->insert(lastRegion);
-    } else {
-      minqi = qi;
-      lastRegion = current;
-    }
+    //while (!branch(current) && (!branch(lower) && !branch(upper))) {
+      if (!lower->children->isEmpty()) {
+        lower = *(lower->children->begin());
+        current = *(current->children->begin());
+        upper = *(upper->children->begin());
 
-    current = current->parent;
-    lower = lower->parent;
-    upper = upper->parent;
-  }
+        qi = ((double) (upper->size - lower->size)) / ((double) current->size);
+        if (lastWasMin && (qi > lastqi)) {
+          regionsFound->insert(lastRegion);
+        // CALCULATE
+        } else {
+          finished = true;
+          break;
+        }
+      }
 
-  if (qi == minqi) {
-    regionsFound->insert(lastRegion);
+      // Find branches taken further up, if upper & current are branching too.
+      mser::Region *nextCurrent = lower;
+      while (nextCurrent->parent != current) {
+        nextCurrent = nextCurrent->parent;
+      }
+      current = nextCurrent;
+
+      mser::Region *nextUpper = lower;
+      while (nextUpper->parent != upper) {
+        nextUpper = nextUpper->parent;
+      }
+      upper = nextUpper;
+
+      if (branch(lower)) {
+        for (RegionSet::iterator lci = lower->children->begin(), lce = lower->children->end();
+            lci != lce; ++lci) {
+
+          // FIXME(hermannloose): Last argument is bogus.
+          RegionSet *branchedFound = walkRegions(current, *lci, upper, lastqi, false);
+          regionsFound->unite(*branchedFound);
+          delete branchedFound;
+        }
+        finished = true;
+      }
+
+    //}
   }
 
   return regionsFound;

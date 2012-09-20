@@ -1,6 +1,5 @@
 #include "Pixel.h"
 #include "PixelImage.h"
-#include "QuadTree.h"
 
 #include <QColor>
 #include <QImage>

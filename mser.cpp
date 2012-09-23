@@ -1,5 +1,6 @@
 #include "Pixel.h"
 #include "PixelImage.h"
+#include "RegionWalker.h"
 
 #include <QColor>
 #include <QImage>
@@ -24,6 +25,8 @@ RegionSet* findLowers(mser::Region *region, int depth);
 
 RegionSet* walkRegions(mser::Region *current, mser::Region *lower, mser::Region *upper,
     double minqi, bool lastWasMin);
+
+void paintRegion(mser::Region *region, QImage *output);
 
 void dumpRegions(mser::Region *region, int indent, int depth);
 
@@ -137,6 +140,7 @@ int main(int argc, char *argv[]) {
 
           // HACK.
           mser::Region *parentToSet = region;
+          /*
           for (int d = pixel->gray; d < (*ri)->gray; ++d) {
             mser::Region *dummyRegion = new mser::Region();
             dummyRegion->parent = parentToSet;
@@ -144,6 +148,7 @@ int main(int argc, char *argv[]) {
             parentToSet->children->insert(dummyRegion);
             parentToSet = dummyRegion;
           }
+          */
 
           (*ri)->parent = parentToSet;
           parentToSet->children->insert(*ri);
@@ -182,63 +187,13 @@ int main(int argc, char *argv[]) {
   for (RegionSet::iterator i = regionLeaves->begin(), e = regionLeaves->end(); i != e; ++i) {
     cerr << "Setting up region walk for region " << *i << "." << endl;
 
-    //dumpRegions(*i, 0, 20);
+    RegionWalker *walker = new RegionWalker(*i, delta);
+    ResultSet *results = walker->findMSER();
+    delete walker;
 
-    RegionSet *lowers = findLowers(*i, delta * 2 + 1);
-
-    cerr << "Found " << lowers->size() << " starting 'leaves'." << endl;
-
-    for (RegionSet::iterator li = lowers->begin(), le = lowers->end(); li != le; ++li) {
-      mser::Region *lower = *li;
-      mser::Region *current = lower;
-      mser::Region *upper = lower;
-
-      for (int k = 0; k < delta; ++k) {
-        current = current->parent;
-      }
-      for (int k = 0; k < delta * 2; ++k) {
-        upper = upper->parent;
-      }
-
-      assert(current);
-      assert(upper);
-
-      cerr << "Walking regions." << endl;
-
-      // FIXME(hermannloose): Last two arguments are bogus.
-      RegionSet *regionsFound = walkRegions(current, lower, upper, 20, false);
-
-      cerr << "Found " << regionsFound->size() << " regions for starting region "
-          << lower << "." << endl;
-
-      while (!regionsFound->isEmpty()) {
-        RegionSet::iterator first = regionsFound->begin();
-        mser::Region *head = *first;
-        regionsFound->remove(head);
-
-        /*
-        for (RegionSet::iterator fi = head->children->begin(), fe = head->children->end();
-            fi != fe; ++fi) {
-            */
-        if (head->parent) {
-          regionsFound->insert(head->parent);
-        }
-
-        for (PixelVector::iterator pi = head->pixels->begin(), pe = head->pixels->end();
-            pi != pe; ++pi) {
-
-          if (output.depth() > 8) {
-            output.setPixel((*pi)->x, (*pi)->y, 0xffff0000);
-          } else {
-            output.setPixel((*pi)->x, (*pi)->y, 80);
-          }
-        }
-      }
-
-      delete regionsFound;
+    for (ResultSet::iterator ri = results->begin(), re = results->end(); ri != re; ++ri) {
+      paintRegion((*ri)->region, &output);
     }
-
-    delete lowers;
   }
 
   cerr << "Saving output." << endl;
@@ -248,6 +203,28 @@ int main(int argc, char *argv[]) {
   }
 
   return 0;
+}
+
+void paintRegion(mser::Region *region, QImage *output) {
+  int depth = output->depth();
+  RegionSet *toPaint = new RegionSet();
+  toPaint->insert(region);
+
+  while (!toPaint->isEmpty()) {
+    mser::Region *r = *(toPaint->begin());
+    toPaint->remove(r);
+    toPaint->unite(*(r->children));
+
+    for (PixelVector::iterator pi = r->pixels->begin(), pe = r->pixels->end();
+        pi != pe; ++pi) {
+
+      if (depth > 8) {
+        output->setPixel((*pi)->x, (*pi)->y, 0xffff0000);
+      } else {
+        output->setPixel((*pi)->x, (*pi)->y, 80);
+      }
+    }
+  }
 }
 
 inline void mergeRegions(mser::Region *merge, mser::Region *into) {

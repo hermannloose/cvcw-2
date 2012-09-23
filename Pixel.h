@@ -12,6 +12,7 @@ namespace mser {
   typedef QVector<Pixel*> PixelVector;
   typedef QSet<Pixel*> PixelSet;
 
+  typedef QVector<Region*> RegionVector;
   typedef QSet<Region*> RegionSet;
 
   class Pixel {

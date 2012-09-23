@@ -20,8 +20,12 @@ using namespace mser;
 
 static char *opts = "d:";
 
+RegionSet* findLowers(mser::Region *region, int depth);
+
 RegionSet* walkRegions(mser::Region *current, mser::Region *lower, mser::Region *upper,
     double minqi, bool lastWasMin);
+
+void dumpRegions(mser::Region *region, int indent, int depth);
 
 void mergeRegions(mser::Region *merge, mser::Region *into);
 
@@ -96,8 +100,18 @@ int main(int argc, char *argv[]) {
   RegionSet *regionLeaves = new RegionSet();
 
   int pixelsWithNeighbours = 0;
+  int lastPlacedGray = 256;
+  int pixelsPlaced = 0;
   for (PixelVector::iterator i = sortedPixels->begin(), e = sortedPixels->end(); i != e; ++i) {
     Pixel *pixel = *i;
+    /*
+    if (pixel->gray < lastPlacedGray) {
+      cerr << "gray: " << (int) pixel->gray << " pixels: " << pixelsPlaced << endl;
+      lastPlacedGray = pixel->gray;
+      pixelsPlaced = 0;
+    }
+    ++pixelsPlaced;
+    */
 
     PixelVector *neighbours = pimage->neighbours(*i);
 
@@ -120,17 +134,27 @@ int main(int argc, char *argv[]) {
 
         if ((*ri)->gray > pixel->gray) {
           // Brighter regions to be grouped under this one.
-          (*ri)->parent = region;
-          region->children->insert(*ri);
+
+          // HACK.
+          mser::Region *parentToSet = region;
+          for (int d = pixel->gray; d < (*ri)->gray; ++d) {
+            mser::Region *dummyRegion = new mser::Region();
+            dummyRegion->parent = parentToSet;
+            dummyRegion->size = (*ri)->size;
+            parentToSet->children->insert(dummyRegion);
+            parentToSet = dummyRegion;
+          }
+
+          (*ri)->parent = parentToSet;
+          parentToSet->children->insert(*ri);
           region->size += (*ri)->size;
+          regionLeaves->remove(*ri);
         } else {
           assert((*ri)->gray == pixel->gray);
           // We've found a preexisting region for the same threshold, merge.
           mergeRegions(region, *ri);
 
-          if (pixel->gray == darkest) {
-            regionLeaves->remove(region);
-          }
+          regionLeaves->remove(region);
           delete region;
 
           region = *ri;
@@ -140,15 +164,12 @@ int main(int argc, char *argv[]) {
       pixel->region = region;
       region->pixels->append(pixel);
       region->size += 1;
+      regionLeaves->insert(region);
 
       delete rootRegions;
     }
 
     pimage->insert(pixel);
-
-    if (pixel->gray == darkest) {
-      regionLeaves->insert(pixel->region);
-    }
 
     delete neighbours;
   }
@@ -161,62 +182,63 @@ int main(int argc, char *argv[]) {
   for (RegionSet::iterator i = regionLeaves->begin(), e = regionLeaves->end(); i != e; ++i) {
     cerr << "Setting up region walk for region " << *i << "." << endl;
 
-    mser::Region *current = *i;
-    mser::Region *lower = *i;
-    mser::Region *upper = *i;
-    bool failedToSpan = false;
+    //dumpRegions(*i, 0, 20);
 
-    for (int x = 0; x < delta; ++x) {
-      if (current->parent) {
+    RegionSet *lowers = findLowers(*i, delta * 2 + 1);
+
+    cerr << "Found " << lowers->size() << " starting 'leaves'." << endl;
+
+    for (RegionSet::iterator li = lowers->begin(), le = lowers->end(); li != le; ++li) {
+      mser::Region *lower = *li;
+      mser::Region *current = lower;
+      mser::Region *upper = lower;
+
+      for (int k = 0; k < delta; ++k) {
         current = current->parent;
-      } else {
-        failedToSpan = true;
-        break;
       }
-    }
-
-    for (int x = 0; x < delta * 2; ++x) {
-      if (upper->parent) {
+      for (int k = 0; k < delta * 2; ++k) {
         upper = upper->parent;
-      } else {
-        failedToSpan = true;
-        break;
-      }
-    }
-
-    if (failedToSpan) {
-      cerr << "Failed to span." << endl;
-      continue;
-    } else {
-      //cerr << endl;
-    }
-
-    cerr << "Walking regions." << endl;
-
-    // FIXME(hermannloose): Last two arguments are bogus.
-    RegionSet *regionsFound = walkRegions(current, lower, upper, 1, false);
-
-    cerr << "Found " << regionsFound->size() << " regions for starting region "
-        << lower << "." << endl;
-
-    while (!regionsFound->isEmpty()) {
-      RegionSet::iterator first = regionsFound->begin();
-      regionsFound->remove(*first);
-
-      for (RegionSet::iterator fi = (*first)->children->begin(), fe = (*first)->children->end();
-          fi != fe; ++fi) {
-
-        regionsFound->insert(*fi);
       }
 
-      for (PixelVector::iterator pi = (*first)->pixels->begin(), pe = (*first)->pixels->end();
-          pi != pe; ++pi) {
+      assert(current);
+      assert(upper);
 
-        output.setPixel((*pi)->x, (*pi)->y, 0xffff0000);
+      cerr << "Walking regions." << endl;
+
+      // FIXME(hermannloose): Last two arguments are bogus.
+      RegionSet *regionsFound = walkRegions(current, lower, upper, 20, false);
+
+      cerr << "Found " << regionsFound->size() << " regions for starting region "
+          << lower << "." << endl;
+
+      while (!regionsFound->isEmpty()) {
+        RegionSet::iterator first = regionsFound->begin();
+        mser::Region *head = *first;
+        regionsFound->remove(head);
+
+        /*
+        for (RegionSet::iterator fi = head->children->begin(), fe = head->children->end();
+            fi != fe; ++fi) {
+            */
+        if (head->parent) {
+          regionsFound->insert(head->parent);
+        }
+
+        for (PixelVector::iterator pi = head->pixels->begin(), pe = head->pixels->end();
+            pi != pe; ++pi) {
+
+          if (output.depth() > 8) {
+            output.setPixel((*pi)->x, (*pi)->y, 0xffff0000);
+          } else {
+            output.setPixel((*pi)->x, (*pi)->y, 80);
+          }
+        }
       }
+
+      delete regionsFound;
     }
 
-    delete regionsFound;
+    delete lowers;
   }
 
   cerr << "Saving output." << endl;
@@ -257,14 +279,15 @@ RegionSet* walkRegions(mser::Region *current, mser::Region *lower,
 
   while (true) {
     qi = ((double) (upper->size - lower->size)) / ((double) current->size);
+    cerr << qi << " ";
 
-    if (lastWasMin && (qi > lastqi)) {
+    if (lastWasMin && (qi > (lastqi + 0.02))) {
       cerr << "Found minimum!" << endl;
       regionsFound->insert(lastRegion);
       lastWasMin = false;
     }
 
-    if (qi < lastqi) {
+    if ((qi + 0.02) < lastqi) {
       lastWasMin = true;
       lastRegion = current;
     }
@@ -294,7 +317,6 @@ RegionSet* walkRegions(mser::Region *current, mser::Region *lower,
 
       // Ugly control flow, I know.
       if (lower->children->isEmpty() && lastWasMin) {
-        cerr << "Leaf reached." << endl;
         regionsFound->insert(lastRegion);
       }
       // Finished.
@@ -305,4 +327,36 @@ RegionSet* walkRegions(mser::Region *current, mser::Region *lower,
   }
 
   return regionsFound;
+}
+
+RegionSet* findLowers(mser::Region *region, int depth) {
+  RegionSet *lowers = new RegionSet();
+
+  if (depth > 1) {
+    for (RegionSet::iterator i = region->children->begin(), e = region->children->end();
+        i != e; ++i) {
+      RegionSet *childrenLowers = findLowers(*i, depth - 1);
+      lowers->unite(*childrenLowers);
+      delete childrenLowers;
+    }
+  } else {
+    lowers->insert(region);
+  }
+
+  return lowers;
+}
+
+void dumpRegions(mser::Region *region, int indent, int depth) {
+  for (int i = 0; i < indent; ++i) {
+    cerr << " ";
+  }
+
+  cerr << region << ": size = " << region->size << " gray = " << (int) region->gray
+      << " pixels = " << region->pixels->size() << endl;
+  if (depth > 0) {
+    for (RegionSet::iterator i = region->children->begin(), e = region->children->end();
+        i != e; ++i) {
+      dumpRegions(*i, indent + 1, depth - 1);
+    }
+  }
 }

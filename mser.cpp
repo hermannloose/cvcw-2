@@ -85,8 +85,7 @@ int main(int argc, char *argv[]) {
 
   for (int x = 0; x < width; ++x) {
     for (int y = 0; y < height; ++y) {
-      pixels->append(new Pixel(QPoint(x, y), qGray(input.pixel(x, y))));
-      //cerr << "[" << x << ", " << y << "] = " << qGray(input.pixel(x, y)) << endl;
+      pixels->append(new Pixel(x, y, qGray(input.pixel(x, y))));
     }
   }
 

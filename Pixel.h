@@ -20,6 +20,7 @@ namespace mser {
     public:
       Pixel();
       Pixel(QPoint position, int gray);
+      Pixel(unsigned short x, unsigned short y, unsigned char gray);
 
       unsigned short x;
       unsigned short y;

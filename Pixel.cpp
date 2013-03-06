@@ -20,6 +20,12 @@ namespace mser {
     y = position.y();
   }
 
+  Pixel::Pixel(unsigned short x, unsigned short y, unsigned char gray) {
+    this->x = x;
+    this->y = y;
+    this->gray = gray;
+  }
+
   Region* Pixel::getRootRegion() {
     Region *rootRegion = region;
     assert(rootRegion);

@@ -2,6 +2,8 @@
 
 #include "Pixel.h"
 
+#include <log4cxx/logger.h>
+
 namespace mser {
 
   class RegionWalker;
@@ -25,6 +27,8 @@ namespace mser {
       ResultSet* findMSER();
       void ascend(int gray);
       int getSize();
+
+      static log4cxx::LoggerPtr logger;
 
     private:
       int gray;

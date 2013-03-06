@@ -1,8 +1,12 @@
 #include "RegionWalker.h"
 
+#include <log4cxx/logger.h>
+
 #include <QMutableVectorIterator>
 
 #include <iostream>
+
+using namespace log4cxx;
 
 using namespace std;
 
@@ -63,11 +67,11 @@ namespace mser {
       }
       ascend(gray + delta);
       qi = ((double) (parent->size - getSize()) / (double) current->size);
-      cerr << qi << endl;
+      LOG4CXX_TRACE(logger, qi);
       if (qi <= lastQi - 0.1) {
         lastWasMin = true;
       } else {
-        cerr << "Found minimum." << endl;
+        LOG4CXX_DEBUG(logger, "Found minimum");
         results->insert(new MinimumResult(current->parent, lastQi));
         lastWasMin = false;
       }
@@ -89,7 +93,7 @@ namespace mser {
       }
     }
 
-    cerr << "Returning results." << endl;
+    LOG4CXX_DEBUG(logger, "Returning results");
     return results;
   }
 

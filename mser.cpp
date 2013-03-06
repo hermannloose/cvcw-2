@@ -42,6 +42,7 @@ void dumpRegions(mser::Region *region, int indent, int depth);
 void mergeRegions(mser::Region *merge, mser::Region *into);
 
 LoggerPtr logger(Logger::getLogger("mser"));
+LoggerPtr RegionWalker::logger(Logger::getLogger("mser.RegionWalker"));
 
 int main(int argc, char *argv[]) {
   short delta = 5;
@@ -258,7 +259,7 @@ RegionSet* walkRegions(mser::Region *current, mser::Region *lower,
 
   while (true) {
     qi = ((double) (upper->size - lower->size)) / ((double) current->size);
-    LOG4CXX_DEBUG(logger, qi);
+    LOG4CXX_TRACE(logger, qi);
 
     if (lastWasMin && (qi > (lastqi + 0.02))) {
       LOG4CXX_DEBUG(logger, "Found minimum!");

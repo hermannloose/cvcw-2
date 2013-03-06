@@ -65,13 +65,6 @@ int main(int argc, char *argv[]) {
   // TODO(hermannloose): Let user choose which file to work on.
   QImage input(inputFilename->c_str());
 
-  /*
-  if (!input.isGrayscale()) {
-    cerr << "Image isn't grayscale, aborting." << endl;
-    exit(1);
-  }
-  */
-
   int width = input.width();
   int height = input.height();
 
@@ -94,7 +87,6 @@ int main(int argc, char *argv[]) {
   PixelVector *sortedPixels = Pixel::binSort(pixels);
   delete pixels;
   reverse(sortedPixels->begin(), sortedPixels->end());
-  int darkest = sortedPixels->at(0)->gray;
 
   cerr << "Placing pixels." << endl;
 
@@ -102,18 +94,8 @@ int main(int argc, char *argv[]) {
   RegionSet *regionLeaves = new RegionSet();
 
   int pixelsWithNeighbours = 0;
-  int lastPlacedGray = 256;
-  int pixelsPlaced = 0;
   for (PixelVector::iterator i = sortedPixels->begin(), e = sortedPixels->end(); i != e; ++i) {
     Pixel *pixel = *i;
-    /*
-    if (pixel->gray < lastPlacedGray) {
-      cerr << "gray: " << (int) pixel->gray << " pixels: " << pixelsPlaced << endl;
-      lastPlacedGray = pixel->gray;
-      pixelsPlaced = 0;
-    }
-    ++pixelsPlaced;
-    */
 
     PixelVector *neighbours = pimage->neighbours(*i);
 

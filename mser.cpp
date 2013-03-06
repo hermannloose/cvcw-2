@@ -2,6 +2,11 @@
 #include "PixelImage.h"
 #include "RegionWalker.h"
 
+#include <log4cxx/logger.h>
+#include <log4cxx/basicconfigurator.h>
+#include <log4cxx/propertyconfigurator.h>
+#include <log4cxx/helpers/exception.h>
+
 #include <QColor>
 #include <QImage>
 #include <QPoint>
@@ -16,8 +21,12 @@
 #include <string>
 #include <unistd.h>
 
-using namespace std;
 using namespace mser;
+
+using namespace log4cxx;
+using namespace log4cxx::helpers;
+
+using namespace std;
 
 static char *opts = "d:";
 
@@ -31,6 +40,8 @@ void paintRegion(mser::Region *region, QImage *output);
 void dumpRegions(mser::Region *region, int indent, int depth);
 
 void mergeRegions(mser::Region *merge, mser::Region *into);
+
+LoggerPtr logger(Logger::getLogger("mser"));
 
 int main(int argc, char *argv[]) {
   short delta = 5;
@@ -62,19 +73,29 @@ int main(int argc, char *argv[]) {
     outputFilename = new string("output.png");
   }
 
-  // TODO(hermannloose): Let user choose which file to work on.
+  ++optind;
+
+  try {
+    if (optind < argc) {
+      PropertyConfigurator::configure(argv[optind]);
+    } else {
+      BasicConfigurator::configure();
+    }
+  } catch (Exception&) {
+  }
+
   QImage input(inputFilename->c_str());
 
   int width = input.width();
   int height = input.height();
 
-  cerr << "Got image [" << width << "x" << height <<"]." << endl;
-  cerr << "Using delta of " << delta << "." << endl;
+  LOG4CXX_INFO(logger, "Got image [" << width << "x" << height << "]");
+  LOG4CXX_INFO(logger, "Using delta of " << delta);
 
   PixelVector *pixels = new PixelVector();
   pixels->reserve(width * height);
 
-  cerr << "Building pixels." << endl;
+  LOG4CXX_INFO(logger, "Building pixels");
 
   for (int x = 0; x < width; ++x) {
     for (int y = 0; y < height; ++y) {
@@ -82,13 +103,13 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  cerr << "Sorting pixels." << endl;
+  LOG4CXX_INFO(logger, "Sorting pixels");
 
   PixelVector *sortedPixels = Pixel::binSort(pixels);
   delete pixels;
   reverse(sortedPixels->begin(), sortedPixels->end());
 
-  cerr << "Placing pixels." << endl;
+  LOG4CXX_INFO(logger, "Placing pixels");
 
   PixelImage *pimage = new PixelImage(width, height);
   RegionSet *regionLeaves = new RegionSet();
@@ -160,13 +181,13 @@ int main(int argc, char *argv[]) {
     delete neighbours;
   }
 
-  cerr << "Built region tree." << endl;
-  cerr << "Got " << regionLeaves->size() << " regions with the darkest shade." << endl;
+  LOG4CXX_INFO(logger, "Built region tree");
+  LOG4CXX_DEBUG(logger, "Got " << regionLeaves->size() << " regions with the darkest shade");
 
   QImage output(input);
 
   for (RegionSet::iterator i = regionLeaves->begin(), e = regionLeaves->end(); i != e; ++i) {
-    cerr << "Setting up region walk for region " << *i << "." << endl;
+    LOG4CXX_DEBUG(logger, "Setting up region walk for region " << *i);
 
     RegionWalker *walker = new RegionWalker(*i, delta);
     ResultSet *results = walker->findMSER();
@@ -177,10 +198,10 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  cerr << "Saving output." << endl;
+  LOG4CXX_INFO(logger, "Saving output");
 
   if (!output.save(outputFilename->c_str())) {
-    cerr << "Couldn't save image!" << endl;
+    LOG4CXX_ERROR(logger, "Couldn't save image!");
   }
 
   return 0;
@@ -237,10 +258,10 @@ RegionSet* walkRegions(mser::Region *current, mser::Region *lower,
 
   while (true) {
     qi = ((double) (upper->size - lower->size)) / ((double) current->size);
-    cerr << qi << " ";
+    LOG4CXX_DEBUG(logger, qi);
 
     if (lastWasMin && (qi > (lastqi + 0.02))) {
-      cerr << "Found minimum!" << endl;
+      LOG4CXX_DEBUG(logger, "Found minimum!");
       regionsFound->insert(lastRegion);
       lastWasMin = false;
     }

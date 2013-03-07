@@ -8,6 +8,7 @@ namespace mser {
 
   class Pixel;
   class Region;
+  class RegionWalker;
 
   typedef QVector<Pixel*> PixelVector;
   typedef QSet<Pixel*> PixelSet;
@@ -35,6 +36,8 @@ namespace mser {
   };
 
   class Region {
+    friend class RegionWalker;
+
     public:
       Region();
       ~Region();
@@ -43,6 +46,16 @@ namespace mser {
       PixelVector *pixels;
       int size;
 
+      void mergeInto(Region *other);
+      void groupUnder(Region *parent);
+      Region* getRootRegion();
+
+      // TODO(hermannloose): Hack, remove.
+      PixelVector::iterator pixelsBegin();
+      PixelVector::iterator pixelsEnd();
+      RegionSet* exposeChildren();
+
+    private:
       Region *parent;
       RegionSet *children;
   };

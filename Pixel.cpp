@@ -27,13 +27,7 @@ namespace mser {
   }
 
   Region* Pixel::getRootRegion() {
-    Region *rootRegion = region;
-    assert(rootRegion);
-    while (rootRegion->parent != NULL) {
-      rootRegion = rootRegion->parent;
-    }
-
-    return rootRegion;
+    return region->getRootRegion();
   }
 
   PixelVector* Pixel::binSort(PixelVector *original) {
@@ -78,6 +72,50 @@ namespace mser {
   Region::~Region() {
     delete pixels;
     delete children;
+  }
+
+  void Region::mergeInto(Region *other) {
+    for (RegionSet::iterator i = children->begin(), e = children->end(); i != e; ++i) {
+      (*i)->parent = other;
+      other->children->insert(*i);
+      // TODO(hermannloose): Invalidate potentially cached root regions.
+    }
+
+    for (PixelVector::iterator i = pixels->begin(), e = pixels->end(); i != e; ++i) {
+      (*i)->region = other;
+      other->pixels->append(*i);
+    }
+
+    other->size += size;
+  }
+
+  void Region::groupUnder(Region *parent) {
+    this->parent = parent;
+    parent->children->insert(this);
+    parent->size += size;
+    // TODO(hermannloose): Invalidate potentially cached root regions.
+  }
+
+  Region* Region::getRootRegion() {
+    // TODO(hermannloose): Memoize here.
+    Region *rootRegion = this;
+    while (rootRegion->parent != NULL) {
+      rootRegion = rootRegion->parent;
+    }
+
+    return rootRegion;
+  }
+
+  PixelVector::iterator Region::pixelsBegin() {
+    return pixels->begin();
+  }
+
+  PixelVector::iterator Region::pixelsEnd() {
+    return pixels->end();
+  }
+
+  RegionSet* Region::exposeChildren() {
+    return children;
   }
 
 }

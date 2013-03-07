@@ -30,14 +30,20 @@ using namespace std;
 
 static char *opts = "d:";
 
+/*
 RegionSet* findLowers(mser::Region *region, int depth);
+*/
 
+/*
 RegionSet* walkRegions(mser::Region *current, mser::Region *lower, mser::Region *upper,
     double minqi, bool lastWasMin);
+    */
 
 void paintRegion(mser::Region *region, QImage *output);
 
+/*
 void dumpRegions(mser::Region *region, int indent, int depth);
+*/
 
 void mergeRegions(mser::Region *merge, mser::Region *into);
 
@@ -153,9 +159,14 @@ int main(int argc, char *argv[]) {
           }
           */
 
+          /*
           (*ri)->parent = parentToSet;
           parentToSet->children->insert(*ri);
           region->size += (*ri)->size;
+          */
+
+          (*ri)->groupUnder(region);
+
           regionLeaves->remove(*ri);
         } else {
           assert((*ri)->gray == pixel->gray);
@@ -216,9 +227,9 @@ void paintRegion(mser::Region *region, QImage *output) {
   while (!toPaint->isEmpty()) {
     mser::Region *r = *(toPaint->begin());
     toPaint->remove(r);
-    toPaint->unite(*(r->children));
+    toPaint->unite(*(r->exposeChildren()));
 
-    for (PixelVector::iterator pi = r->pixels->begin(), pe = r->pixels->end();
+    for (PixelVector::iterator pi = r->pixelsBegin(), pe = r->pixelsEnd();
         pi != pe; ++pi) {
 
       if (depth > 8) {
@@ -234,21 +245,10 @@ inline void mergeRegions(mser::Region *merge, mser::Region *into) {
   assert(merge && into);
   assert(merge->gray == into->gray);
 
-  for (RegionSet::iterator i = merge->children->begin(), e = merge->children->end();
-      i != e; ++i) {
-    (*i)->parent = into;
-    into->children->insert(*i);
-  }
-
-  for (PixelVector::iterator i = merge->pixels->begin(), e = merge->pixels->end();
-      i != e; ++i) {
-    (*i)->region = into;
-    into->pixels->append(*i);
-  }
-
-  into->size += merge->size;
+  merge->mergeInto(into);
 }
 
+/*
 RegionSet* walkRegions(mser::Region *current, mser::Region *lower,
     mser::Region *upper, double lastqi, bool lastWasMin) {
 
@@ -308,7 +308,9 @@ RegionSet* walkRegions(mser::Region *current, mser::Region *lower,
 
   return regionsFound;
 }
+*/
 
+/*
 RegionSet* findLowers(mser::Region *region, int depth) {
   RegionSet *lowers = new RegionSet();
 
@@ -325,7 +327,9 @@ RegionSet* findLowers(mser::Region *region, int depth) {
 
   return lowers;
 }
+*/
 
+/*
 void dumpRegions(mser::Region *region, int indent, int depth) {
   for (int i = 0; i < indent; ++i) {
     cerr << " ";
@@ -340,3 +344,4 @@ void dumpRegions(mser::Region *region, int indent, int depth) {
     }
   }
 }
+*/

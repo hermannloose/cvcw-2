@@ -83,13 +83,14 @@ int main(int argc, char *argv[]) {
   int width = input.width();
   int height = input.height();
 
-  LOG4CXX_INFO(logger, "Got image [" << width << "x" << height << "]");
+  LOG4CXX_INFO(logger, "Got image [" << width << "x" << height << "] = "
+      << width * height << " pixels");
   LOG4CXX_INFO(logger, "Using delta of " << delta);
 
   PixelVector *pixels = new PixelVector();
   pixels->reserve(width * height);
 
-  LOG4CXX_INFO(logger, "Building pixels");
+  LOG4CXX_DEBUG(logger, "Building pixels");
 
   for (int x = 0; x < width; ++x) {
     for (int y = 0; y < height; ++y) {
@@ -124,55 +125,53 @@ int main(int argc, char *argv[]) {
     } else {
       RegionSet *rootRegions = Pixel::getRootRegions(neighbours);
 
-      // Speculative new region.
-      mser::Region *region = new mser::Region();
-      region->gray = pixel->gray;
+      LOG4CXX_TRACE(logger, rootRegions->size() << " root regions for neighbours of "
+          << pixel->x << "x" << pixel->y);
 
+      RegionSet *toMerge = new RegionSet();
+      RegionSet *toGroup = new RegionSet();
       for (RegionSet::iterator ri = rootRegions->begin(), re = rootRegions->end();
           ri != re; ++ri) {
-
-        if ((*ri)->gray > pixel->gray) {
-          // Brighter regions to be grouped under this one.
-
-          // HACK.
-          mser::Region *parentToSet = region;
-          /*
-          for (int d = pixel->gray; d < (*ri)->gray; ++d) {
-            mser::Region *dummyRegion = new mser::Region();
-            dummyRegion->parent = parentToSet;
-            dummyRegion->size = (*ri)->size;
-            parentToSet->children->insert(dummyRegion);
-            parentToSet = dummyRegion;
-          }
-          */
-
-          /*
-          (*ri)->parent = parentToSet;
-          parentToSet->children->insert(*ri);
-          region->size += (*ri)->size;
-          */
-
-          (*ri)->groupUnder(region);
-
-          regionLeaves->remove(*ri);
+        if ((*ri)->gray == pixel->gray) {
+          toMerge->insert(*ri);
         } else {
-          assert((*ri)->gray == pixel->gray);
-          // We've found a preexisting region for the same threshold, merge.
-          mergeRegions(region, *ri);
+          assert((*ri)->gray > pixel->gray);
+          toGroup->insert(*ri);
+        }
+      }
 
-          regionLeaves->remove(region);
-          delete region;
+      delete rootRegions;
 
-          region = *ri;
+      mser::Region *region;
+      if (toMerge->isEmpty()) {
+        region = new mser::Region();
+        region->gray = pixel->gray;
+      } else {
+        for (RegionSet::iterator ri = toMerge->begin(); ri != toMerge->end(); ++ri) {
+          if (ri == toMerge->begin()) {
+            region = *ri;
+          } else {
+            mser::Region *toDelete = *ri;
+            toDelete->mergeInto(region);
+            LOG4CXX_TRACE(logger, "Erasing merged region " << *ri);
+            ri = toMerge->erase(ri);
+            regionLeaves->remove(toDelete);
+            --ri;
+            delete toDelete;
+          }
         }
       }
 
       pixel->region = region;
       region->pixels->append(pixel);
       region->size += 1;
-      regionLeaves->insert(region);
 
-      delete rootRegions;
+      for (RegionSet::iterator ri = toGroup->begin(), re = toGroup->end(); ri != re; ++ri) {
+        (*ri)->groupUnder(region);
+        regionLeaves->remove(*ri);
+      }
+
+      regionLeaves->insert(region);
     }
 
     pimage->insert(pixel);
@@ -190,11 +189,14 @@ int main(int argc, char *argv[]) {
 
     RegionWalker *walker = new RegionWalker(*i, delta);
     ResultSet *results = walker->findMSER();
-    delete walker;
 
     for (ResultSet::iterator ri = results->begin(), re = results->end(); ri != re; ++ri) {
+      LOG4CXX_INFO(logger, "Painting MSER " << *ri << " of size " << (*ri)->region->size);
       paintRegion((*ri)->region, &output);
     }
+
+    delete walker;
+    delete results;
   }
 
   LOG4CXX_INFO(logger, "Saving output");

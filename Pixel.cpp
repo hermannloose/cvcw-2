@@ -75,6 +75,8 @@ namespace mser {
   }
 
   void Region::mergeInto(Region *other) {
+    LOG4CXX_TRACE(logger, "Merging " << this << " into " << other);
+
     for (RegionSet::iterator i = children->begin(), e = children->end(); i != e; ++i) {
       (*i)->parent = other;
       other->children->insert(*i);
@@ -90,6 +92,10 @@ namespace mser {
   }
 
   void Region::groupUnder(Region *parent) {
+    assert(this->parent == NULL);
+
+    LOG4CXX_TRACE(logger, "Grouping " << this << " under " << parent);
+
     this->parent = parent;
     parent->children->insert(this);
     parent->size += size;

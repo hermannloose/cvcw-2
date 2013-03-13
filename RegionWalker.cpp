@@ -93,7 +93,7 @@ namespace mser {
       }
     }
 
-    LOG4CXX_DEBUG(logger, "Returning results");
+    LOG4CXX_TRACE(logger, "Returning results");
     return results;
   }
 

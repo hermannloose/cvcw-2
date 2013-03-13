@@ -1,5 +1,7 @@
 #pragma once
 
+#include <log4cxx/logger.h>
+
 #include <QPoint>
 #include <QSet>
 #include <QVector>
@@ -54,6 +56,8 @@ namespace mser {
       PixelVector::iterator pixelsBegin();
       PixelVector::iterator pixelsEnd();
       RegionSet* exposeChildren();
+
+      static log4cxx::LoggerPtr logger;
 
     private:
       Region *parent;

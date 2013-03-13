@@ -35,6 +35,7 @@ void paintRegion(mser::Region *region, QImage *output);
 void mergeRegions(mser::Region *merge, mser::Region *into);
 
 LoggerPtr logger(Logger::getLogger("mser"));
+LoggerPtr mser::Region::logger(Logger::getLogger("mser.Region"));
 LoggerPtr RegionWalker::logger(Logger::getLogger("mser.RegionWalker"));
 
 int main(int argc, char *argv[]) {

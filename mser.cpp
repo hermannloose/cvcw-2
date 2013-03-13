@@ -30,6 +30,8 @@ using namespace std;
 
 static char *opts = "d:";
 
+RegionSet* placePixels(PixelVector *sortedPixels, int width, int height);
+
 void paintRegion(mser::Region *region, QImage *output);
 
 void mergeRegions(mser::Region *merge, mser::Region *into);
@@ -105,10 +107,69 @@ int main(int argc, char *argv[]) {
   delete pixels;
   reverse(sortedPixels->begin(), sortedPixels->end());
 
+  RegionSet *regionLeaves = placePixels(sortedPixels, width, height);
+
+  QImage output = input.convertToFormat(QImage::Format_RGB32);
+
+  for (RegionSet::iterator i = regionLeaves->begin(), e = regionLeaves->end(); i != e; ++i) {
+    LOG4CXX_DEBUG(logger, "Setting up region walk for region " << *i);
+
+    RegionWalker *walker = new RegionWalker(*i, delta);
+
+    LOG4CXX_INFO(logger, "Finding MSERs");
+    ResultSet *results = walker->findMSER();
+    LOG4CXX_INFO(logger, "Found MSERs");
+
+    for (ResultSet::iterator ri = results->begin(), re = results->end(); ri != re; ++ri) {
+      LOG4CXX_DEBUG(logger, "Painting MSER " << *ri << " of size " << (*ri)->region->size);
+      paintRegion((*ri)->region, &output);
+    }
+
+    delete walker;
+    delete results;
+  }
+
+  LOG4CXX_INFO(logger, "Saving output");
+
+  if (!output.save(outputFilename->c_str())) {
+    LOG4CXX_ERROR(logger, "Couldn't save image!");
+  }
+
+  return 0;
+}
+
+void paintRegion(mser::Region *region, QImage *output) {
+  int depth = output->depth();
+  RegionSet *toPaint = new RegionSet();
+  toPaint->insert(region);
+
+  while (!toPaint->isEmpty()) {
+    mser::Region *r = *(toPaint->begin());
+    toPaint->remove(r);
+    toPaint->unite(*(r->exposeChildren()));
+
+    for (PixelVector::iterator pi = r->pixelsBegin(), pe = r->pixelsEnd();
+        pi != pe; ++pi) {
+      output->setPixel((*pi)->x, (*pi)->y, 0xffff0000);
+    }
+  }
+}
+
+inline void mergeRegions(mser::Region *merge, mser::Region *into) {
+  assert(merge && into);
+  assert(merge->gray == into->gray);
+
+  merge->mergeInto(into);
+}
+
+RegionSet* placePixels(PixelVector *sortedPixels, int width, int height) {
   LOG4CXX_INFO(logger, "Placing pixels");
 
   PixelImage *pimage = new PixelImage(width, height);
   RegionSet *regionLeaves = new RegionSet();
+
+  RegionSet *toMerge = new RegionSet();
+  RegionSet *toGroup = new RegionSet();
 
   int pixelsWithNeighbours = 0;
   for (PixelVector::iterator i = sortedPixels->begin(), e = sortedPixels->end(); i != e; ++i) {
@@ -129,8 +190,9 @@ int main(int argc, char *argv[]) {
       LOG4CXX_TRACE(logger, rootRegions->size() << " root regions for neighbours of "
           << pixel->x << "x" << pixel->y);
 
-      RegionSet *toMerge = new RegionSet();
-      RegionSet *toGroup = new RegionSet();
+      toMerge->clear();
+      toGroup->clear();
+
       for (RegionSet::iterator ri = rootRegions->begin(), re = rootRegions->end();
           ri != re; ++ri) {
         if ((*ri)->gray == pixel->gray) {
@@ -183,58 +245,7 @@ int main(int argc, char *argv[]) {
   LOG4CXX_INFO(logger, "Built region tree");
   LOG4CXX_DEBUG(logger, "Got " << regionLeaves->size() << " regions with the darkest shade");
 
-  QImage output(input);
+  assert(regionLeaves->size() == 1);
 
-  for (RegionSet::iterator i = regionLeaves->begin(), e = regionLeaves->end(); i != e; ++i) {
-    LOG4CXX_DEBUG(logger, "Setting up region walk for region " << *i);
-
-    RegionWalker *walker = new RegionWalker(*i, delta);
-    ResultSet *results = walker->findMSER();
-
-    for (ResultSet::iterator ri = results->begin(), re = results->end(); ri != re; ++ri) {
-      LOG4CXX_INFO(logger, "Painting MSER " << *ri << " of size " << (*ri)->region->size);
-      paintRegion((*ri)->region, &output);
-    }
-
-    delete walker;
-    delete results;
-  }
-
-  LOG4CXX_INFO(logger, "Saving output");
-
-  if (!output.save(outputFilename->c_str())) {
-    LOG4CXX_ERROR(logger, "Couldn't save image!");
-  }
-
-  return 0;
+  return regionLeaves;
 }
-
-void paintRegion(mser::Region *region, QImage *output) {
-  int depth = output->depth();
-  RegionSet *toPaint = new RegionSet();
-  toPaint->insert(region);
-
-  while (!toPaint->isEmpty()) {
-    mser::Region *r = *(toPaint->begin());
-    toPaint->remove(r);
-    toPaint->unite(*(r->exposeChildren()));
-
-    for (PixelVector::iterator pi = r->pixelsBegin(), pe = r->pixelsEnd();
-        pi != pe; ++pi) {
-
-      if (depth > 8) {
-        output->setPixel((*pi)->x, (*pi)->y, 0xffff0000);
-      } else {
-        output->setPixel((*pi)->x, (*pi)->y, 80);
-      }
-    }
-  }
-}
-
-inline void mergeRegions(mser::Region *merge, mser::Region *into) {
-  assert(merge && into);
-  assert(merge->gray == into->gray);
-
-  merge->mergeInto(into);
-}
-

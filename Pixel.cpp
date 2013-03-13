@@ -67,6 +67,7 @@ namespace mser {
 
     pixels = new PixelVector();
     children = new RegionSet();
+    rootRegion = this;
   }
 
   Region::~Region() {
@@ -80,7 +81,7 @@ namespace mser {
     for (RegionSet::iterator i = children->begin(), e = children->end(); i != e; ++i) {
       (*i)->parent = other;
       other->children->insert(*i);
-      // TODO(hermannloose): Invalidate potentially cached root regions.
+      (*i)->invalidateRootRegionCache();
     }
 
     for (PixelVector::iterator i = pixels->begin(), e = pixels->end(); i != e; ++i) {
@@ -99,15 +100,19 @@ namespace mser {
     this->parent = parent;
     parent->children->insert(this);
     parent->size += size;
-    // TODO(hermannloose): Invalidate potentially cached root regions.
+    invalidateRootRegionCache();
   }
 
   Region* Region::getRootRegion() {
-    // TODO(hermannloose): Memoize here.
-    Region *rootRegion = this;
-    while (rootRegion->parent != NULL) {
-      rootRegion = rootRegion->parent;
+    if (rootRegion == this) {
+      if (parent != NULL) {
+        rootRegion = parent;
+      } else {
+        return rootRegion;
+      }
     }
+
+    rootRegion = rootRegion->getRootRegion();
 
     return rootRegion;
   }
@@ -122,6 +127,20 @@ namespace mser {
 
   RegionSet* Region::exposeChildren() {
     return children;
+  }
+
+  void Region::invalidateRootRegionCache() {
+    if (rootRegion != this) {
+      rootRegion = this;
+
+      LOG4CXX_TRACE(logger, "Invalidating child caches");
+
+      for (RegionSet::iterator i = children->begin(), e = children->end(); i != e; ++i) {
+        (*i)->invalidateRootRegionCache();
+      }
+    } else {
+      LOG4CXX_TRACE(logger, "Not invalidating child caches");
+    }
   }
 
 }

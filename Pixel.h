@@ -62,6 +62,9 @@ namespace mser {
     private:
       Region *parent;
       RegionSet *children;
+      Region *rootRegion;
+
+      void invalidateRootRegionCache();
   };
 
 }

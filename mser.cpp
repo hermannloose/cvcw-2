@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <iostream>
 #include <map>
+#include <sstream>
 #include <stdlib.h>
 #include <string>
 #include <unistd.h>
@@ -33,6 +34,8 @@ static char *opts = "d:";
 RegionSet* placePixels(PixelVector *sortedPixels, int width, int height);
 
 void paintRegion(mser::Region *region, QImage *output);
+
+void paintRegionTree(mser::Region *root, QImage *original);
 
 void mergeRegions(mser::Region *merge, mser::Region *into);
 
@@ -128,6 +131,10 @@ int main(int argc, char *argv[]) {
     delete walker;
     delete results;
   }
+
+  LOG4CXX_INFO(logger, "Painting region tree");
+
+  paintRegionTree(*(regionLeaves->begin()), &input);
 
   LOG4CXX_INFO(logger, "Saving output");
 
@@ -248,4 +255,70 @@ RegionSet* placePixels(PixelVector *sortedPixels, int width, int height) {
   assert(regionLeaves->size() == 1);
 
   return regionLeaves;
+}
+
+void paintRegionTree(mser::Region *root, QImage *original) {
+  RegionSet *toPaint[256];
+
+  for (int i = 0; i < 256; ++i) {
+    toPaint[i] = new RegionSet();
+  }
+
+  RegionVector *toProcess = new RegionVector();
+  toProcess->append(root);
+
+  QMutableVectorIterator<mser::Region*> i(*toProcess);
+  while (i.hasNext()) {
+    mser::Region *current = i.next();
+    i.remove();
+    toPaint[current->gray]->insert(current);
+    i.toBack();
+    for (RegionSet::iterator ri = current->exposeChildren()->begin(),
+        re = current->exposeChildren()->end(); ri != re; ++ri) {
+      i.insert(*ri);
+    }
+    i.toFront();
+  }
+
+  srand(0);
+
+  for (int i = 0; i < 256; ++i) {
+    if (toPaint[i]->isEmpty()) {
+      continue;
+    }
+
+    QImage output = original->convertToFormat(QImage::Format_RGB32);
+
+    for (RegionSet::iterator ri = toPaint[i]->begin(), re = toPaint[i]->end(); ri != re; ++ri) {
+      unsigned long color = 0xff000000;
+      color |= (rand() % 255) << 16;
+      color |= (rand() % 255) << 8;
+      color |= (rand() % 255);
+
+      RegionVector *process = new RegionVector();
+      process->append(*ri);
+
+      QMutableVectorIterator<mser::Region*> processi(*process);
+      while (processi.hasNext()) {
+        mser::Region *current = processi.next();
+        processi.remove();
+
+        processi.toBack();
+        for (RegionSet::iterator rri = current->exposeChildren()->begin(),
+            rre = current->exposeChildren()->end(); rri != rre; ++rri) {
+          processi.insert(*rri);
+        }
+        processi.toFront();
+
+        for (PixelVector::iterator pi = current->pixelsBegin(), pe = current->pixelsEnd();
+            pi != pe; ++pi) {
+          output.setPixel((*pi)->x, (*pi)->y, color);
+        }
+      }
+    }
+
+    ostringstream regionFileName;
+    regionFileName << "regions" << i << ".png";
+    output.save(regionFileName.str().c_str());
+  }
 }

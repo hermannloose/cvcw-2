@@ -33,6 +33,7 @@ namespace mser {
       PixelVector *leftColumn = columns->at(pixel->x - 1);
 
       // TOP LEFT
+      /*
       if (pixel->y > 0) {
         neighbour = leftColumn->at(pixel->y - 1);
         if (neighbour != NULL) {
@@ -40,6 +41,7 @@ namespace mser {
         }
         neighbour = NULL;
       }
+      */
 
       // LEFT
       neighbour = leftColumn->at(pixel->y);
@@ -49,6 +51,7 @@ namespace mser {
       neighbour = NULL;
 
       // BOTTOM LEFT
+      /*
       if (pixel->y < height - 1) {
         neighbour = leftColumn->at(pixel->y + 1);
         if (neighbour != NULL) {
@@ -56,6 +59,7 @@ namespace mser {
         }
         neighbour = NULL;
       }
+      */
     }
 
     PixelVector *currentColumn = columns->at(pixel->x);
@@ -82,6 +86,7 @@ namespace mser {
       PixelVector *rightColumn = columns->at(pixel->x + 1);
 
       // TOP RIGHT
+      /*
       if (pixel->y > 0) {
         neighbour = rightColumn->at(pixel->y - 1);
         if (neighbour != NULL) {
@@ -89,6 +94,7 @@ namespace mser {
         }
         neighbour = NULL;
       }
+      */
 
       // RIGHT
       neighbour = rightColumn->at(pixel->y);
@@ -98,6 +104,7 @@ namespace mser {
       neighbour = NULL;
 
       // BOTTOM RIGHT
+      /*
       if (pixel->y < height - 1) {
         neighbour = rightColumn->at(pixel->y + 1);
         if (neighbour != NULL) {
@@ -105,6 +112,7 @@ namespace mser {
         }
         neighbour = NULL;
       }
+      */
     }
 
     return neighbours;

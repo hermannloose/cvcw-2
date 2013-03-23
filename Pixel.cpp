@@ -63,7 +63,9 @@ namespace mser {
   Region::Region() :
       gray(0),
       size(0),
-      parent(0) {
+      parent(0),
+      cachedHigherGray(-1),
+      cachedLowerGray(-1) {
 
     pixels = new PixelVector();
     children = new RegionSet();
@@ -141,6 +143,42 @@ namespace mser {
     } else {
       LOG4CXX_TRACE(logger, "Not invalidating child caches");
     }
+  }
+
+  int Region::nextHigherGray() {
+    if (cachedHigherGray < 0) {
+      if (children->size() > 0) {
+        int minHigherGray = 256;
+        for (RegionSet::iterator i = children->begin(), e = children->end(); i != e; ++i) {
+          minHigherGray = min(minHigherGray, (int) (*i)->gray);
+        }
+        cachedHigherGray = minHigherGray;
+      } else {
+        // TODO(hermannloose): Revisit whether this is a good fallback.
+        cachedHigherGray = gray;
+      }
+    }
+
+    assert(cachedHigherGray >= 0);
+    assert(cachedHigherGray < 256);
+
+    return cachedHigherGray;
+  }
+
+  int Region::nextLowerGray() {
+    if (cachedLowerGray < 0) {
+      if (parent) {
+        cachedLowerGray = parent->gray;
+      } else {
+        // TODO(hermannloose): Revisit whether this is a good fallback.
+        cachedLowerGray = gray;
+      }
+    }
+
+    assert(cachedLowerGray >= 0);
+    assert(cachedLowerGray < 256);
+
+    return cachedLowerGray;
   }
 
 }

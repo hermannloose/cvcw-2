@@ -64,7 +64,13 @@ namespace mser {
       RegionSet *children;
       Region *rootRegion;
 
+      int cachedHigherGray;
+      int cachedLowerGray;
+
       void invalidateRootRegionCache();
+
+      int nextHigherGray();
+      int nextLowerGray();
   };
 
 }

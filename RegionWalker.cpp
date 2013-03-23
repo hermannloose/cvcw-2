@@ -129,63 +129,71 @@ namespace mser {
     // TODO(hermannloose): Add a method to check that before calling.
     assert(lower->children->size() > 0);
 
-    if (lower->nextHigherGray() - lowerGray == 1) {
-      // Step down to next region.
-      if (lower->children->size() > 1) {
-        // Generate new child paths.
+    if (path->indexOf(lower) < path->size() - 1) {
+      // We have chosen a path before, use it.
+      mser::Region *nextLower = path->at(path->indexOf(lower) + 1);
+      if (nextLower->gray - lowerGray == 1) {
+        lower = nextLower;
+      }
+      childPaths->append(this);
+    } else {
+      // We are at a branch.
+      assert(lower->children->size() > 1);
+
+      if (lower->nextHigherGray() - lowerGray == 1) {
+        // Step down to next region.
         childPaths->reserve(lower->children->size());
 
         for (RegionSet::iterator i = lower->children->begin(), e = lower->children->end();
             i != e; ++i) {
           Path *childPath;
-          if (i == lower->children->begin()) {
+          mser::Region *childRegion = *i;
+
+          if (childRegion == *lower->children->begin()) {
             childPath = this;
           } else {
             Path *childPath = new Path(*this);
           }
 
-          childPath->path->append(*i);
-          childPath->
-          // TODO(hermannloose): Modify path accordingly.
+          childPath->path->append(childRegion);
+
+          if (childRegion->gray - lowerGray == 1) {
+            childPath->lower = childRegion;
+          }
+
+          while (childRegion->children->size() == 1) {
+            // Fill child path until next branch.
+            childRegion = *childRegion->children->begin();
+            childPath->path->append(childRegion);
+          }
+
           childPaths->append(childPath);
         }
-
       } else {
-        lower = *lower->children->begin();
-        path->append(lower);
-
+        // Stay in this region.
         childPaths->append(this);
       }
-    } else {
-      childPaths->append(this);
-    }
 
-    for (PathVector::iterator i = childPaths->begin(), e = childPaths->end(); i != e; ++i) {
-      Path *p = (*i);
+      for (PathVector::iterator i = childPaths->begin(), e = childPaths->end(); i != e; ++i) {
+        Path *p = (*i);
 
-      if (p->current->nextHigherGray() - p->currentGray == 1) {
-        // Step down to next region.
-        if (p->current->children->size() > 1) {
-          p->current = p->path->at(p->path->indexOf(p->current) + 1);
-        } else {
-          p->current = *p->current->children->begin();
+        mser::Region *nextCurrent = p->path->at(p->path->indexOf(p->current) + 1);
+        if (nextCurrent->gray - p->currentGray == 1) {
+          // Step down to next region.
+          p->current = nextCurrent;
         }
-      }
 
-      if (p->upper->nextHigherGray() - p->upperGray == 1) {
-        // Step down to next region.
-        if (p->upper->children->size() > 1) {
-          // TODO(hermannloose): Could be optimized since upper should always be
-          // at index 0. Needs proper checks.
-          p->upper = p->path->at(p->path->indexOf(p->upper) + 1);
-        } else {
-          p->upper = *p->upper->children->begin();
+        mser::Region *nextUpper = p->path->at(p->path->indexOf(p->upper) + 1);
+        if (nextUpper->gray - p->upperGray == 1) {
+          // Step down to next region.
+          p->upper = nextUpper;
+          // TODO(hermannloose): Remove unneeded prefix of path.
         }
-      }
 
-      ++p->lowerGray;
-      ++p->currentGray;
-      ++p->upperGray;
+        ++p->lowerGray;
+        ++p->currentGray;
+        ++p->upperGray;
+      }
     }
 
     return childPaths;

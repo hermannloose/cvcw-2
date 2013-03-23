@@ -152,7 +152,7 @@ namespace mser {
           if (childRegion == *lower->children->begin()) {
             childPath = this;
           } else {
-            Path *childPath = new Path(*this);
+            childPath = new Path(*this);
           }
 
           childPath->path->append(childRegion);

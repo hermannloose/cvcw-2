@@ -6,7 +6,10 @@
 
 namespace mser {
 
+  class Path;
   class RegionWalker;
+
+  typedef QVector<Path*> PathVector;
 
   typedef QSet<RegionWalker*> WalkerSet;
 
@@ -36,6 +39,30 @@ namespace mser {
       mser::Region *current;
       RegionVector *regions;
       WalkerSet *walkers;
+  };
+
+  class Path {
+
+    public:
+      Path();
+      Path(Path& other);
+      ~Path();
+
+      PathVector* descend();
+      void ascend();
+      double stability();
+
+    private:
+      RegionList *path;
+
+      mser::Region *upper;
+      unsigned int upperGray;
+
+      mser::Region *current;
+      unsigned int currentGray;
+
+      mser::Region *lower;
+      unsigned int lowerGray;
   };
 
 }

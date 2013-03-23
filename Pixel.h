@@ -2,12 +2,14 @@
 
 #include <log4cxx/logger.h>
 
+#include <QList>
 #include <QPoint>
 #include <QSet>
 #include <QVector>
 
 namespace mser {
 
+  class Path;
   class Pixel;
   class Region;
   class RegionWalker;
@@ -15,6 +17,7 @@ namespace mser {
   typedef QVector<Pixel*> PixelVector;
   typedef QSet<Pixel*> PixelSet;
 
+  typedef QList<Region*> RegionList;
   typedef QVector<Region*> RegionVector;
   typedef QSet<Region*> RegionSet;
 
@@ -38,6 +41,7 @@ namespace mser {
   };
 
   class Region {
+    friend class Path;
     friend class RegionWalker;
 
     public:

@@ -44,13 +44,16 @@ namespace mser {
   class Path {
 
     public:
-      Path();
+      Path(mser::Region *initialLeaf, unsigned int upperGray, unsigned int currentGray,
+          unsigned int lowerGray);
       Path(Path& other);
       ~Path();
 
       PathVector* descend();
       void ascend();
       double stability();
+
+      static log4cxx::LoggerPtr logger;
 
     private:
       RegionList *path;

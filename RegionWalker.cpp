@@ -100,8 +100,56 @@ namespace mser {
 
 
 
-  Path::Path() {
+  Path::Path(mser::Region *initialLeaf, unsigned int upperGray, unsigned int currentGray,
+      unsigned int lowerGray) :
+      upperGray(upperGray), currentGray(currentGray), lowerGray(lowerGray) {
+    assert(initialLeaf->gray >= lowerGray);
+
     path = new RegionList();
+
+    mser::Region *toInsert = initialLeaf;
+
+    bool upperFound = false;
+    bool currentFound = false;
+    bool lowerFound = false;
+
+    path->prepend(toInsert);
+
+    // TODO(hermannloose): Can probably be made nicer.
+    if (toInsert->gray <= upperGray) {
+      upperFound = true;
+      upper = toInsert;
+    }
+
+    if (toInsert->gray <= currentGray) {
+      currentFound = true;
+      current = toInsert;
+    }
+
+    if (toInsert->gray <= lowerGray) {
+      lowerFound = true;
+      lower = toInsert;
+    }
+
+    while (toInsert->parent) {
+      toInsert = toInsert->parent;
+      path->prepend(toInsert);
+
+      if (!upperFound && toInsert->gray <= upperGray) {
+        upperFound = true;
+        upper = toInsert;
+      }
+
+      if (!currentFound && toInsert->gray <= currentGray) {
+        currentFound = true;
+        current = toInsert;
+      }
+
+      if (!lowerFound && toInsert->gray <= lowerGray) {
+        lowerFound = true;
+        lower = toInsert;
+      }
+    }
   }
 
   Path::Path(Path& other) {
@@ -202,6 +250,7 @@ namespace mser {
   void Path::ascend() {
     assert(upperGray > 0);
 
+    LOG4CXX_ERROR(logger, "This is unfinished and should not be called");
 
     QMutableListIterator<mser::Region*> i(*path);
 

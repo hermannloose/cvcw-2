@@ -42,6 +42,7 @@ void mergeRegions(mser::Region *merge, mser::Region *into);
 LoggerPtr logger(Logger::getLogger("mser"));
 LoggerPtr mser::Region::logger(Logger::getLogger("mser.Region"));
 LoggerPtr RegionWalker::logger(Logger::getLogger("mser.RegionWalker"));
+LoggerPtr Path::logger(Logger::getLogger("mser.Path"));
 
 int main(int argc, char *argv[]) {
   short delta = 5;

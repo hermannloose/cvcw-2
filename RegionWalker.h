@@ -11,8 +11,6 @@ namespace mser {
 
   typedef QVector<Path*> PathVector;
 
-  typedef QSet<RegionWalker*> WalkerSet;
-
   class MinimumResult {
     public:
       MinimumResult(mser::Region *region, double qi);
@@ -28,17 +26,12 @@ namespace mser {
       RegionWalker(mser::Region *start, int delta);
       ~RegionWalker();
       ResultSet* findMSER();
-      void ascend(int gray);
-      int getSize();
 
       static log4cxx::LoggerPtr logger;
 
     private:
-      int gray;
+      mser::Region *start;
       int delta;
-      mser::Region *current;
-      RegionVector *regions;
-      WalkerSet *walkers;
   };
 
   class Path {

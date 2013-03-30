@@ -73,6 +73,8 @@ namespace mser {
 
       bool atLeaf();
 
+      friend class MinimumFinder;
+
       static log4cxx::LoggerPtr logger;
 
     private:

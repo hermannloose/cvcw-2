@@ -29,7 +29,7 @@ using namespace log4cxx::helpers;
 
 using namespace std;
 
-static char *opts = "d:";
+static char *opts = "d:r";
 
 RegionSet* placePixels(PixelVector *sortedPixels, int width, int height);
 
@@ -47,6 +47,7 @@ LoggerPtr RegionWalker::logger(Logger::getLogger("mser.RegionWalker"));
 
 int main(int argc, char *argv[]) {
   short delta = 5;
+  bool paintDebugRegions = false;
   string *inputFilename;
   string *outputFilename;
 
@@ -55,6 +56,9 @@ int main(int argc, char *argv[]) {
     switch (c) {
       case 'd':
         delta = atoi(optarg);
+        break;
+      case 'r':
+        paintDebugRegions = true;
         break;
       default:
         break;
@@ -123,7 +127,7 @@ int main(int argc, char *argv[]) {
 
     LOG4CXX_INFO(logger, "Finding MSERs");
     ResultSet *results = walker->findMSER();
-    LOG4CXX_INFO(logger, "Found MSERs");
+    LOG4CXX_INFO(logger, "Painting MSERs");
 
     for (ResultSet::iterator ri = results->begin(), re = results->end(); ri != re; ++ri) {
       LOG4CXX_DEBUG(logger, "Painting MSER " << *ri << " of size " << (*ri)->region->size);
@@ -134,9 +138,10 @@ int main(int argc, char *argv[]) {
     delete results;
   }
 
-  LOG4CXX_INFO(logger, "Painting region tree");
-
-  paintRegionTree(*(regionLeaves->begin()), &input);
+  if (paintDebugRegions) {
+    LOG4CXX_INFO(logger, "Painting region tree for debugging, this may take a while");
+    paintRegionTree(*(regionLeaves->begin()), &input);
+  }
 
   LOG4CXX_INFO(logger, "Saving output");
 

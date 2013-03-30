@@ -56,6 +56,10 @@ namespace mser {
 
     for (PathList::iterator i = childPaths->begin(), e = childPaths->end(); i != e; ++i) {
       Path *childPath = *i;
+
+      LOG4CXX_TRACE(logger, "Path (" << childPath->upperGray << "/" << childPath->currentGray
+          << "/" << childPath->lowerGray << ")");
+
       // TODO(hermannloose): Optimize for first child path.
       MinimumFinder *childFinder = new MinimumFinder(childPath, region, lastQi);
       double qi = childPath->stability();
@@ -97,7 +101,7 @@ namespace mser {
 
     while (!toProcess->isEmpty()) {
       mser::Region *region = toProcess->takeFirst();
-      if (region->gray > delta * 2 + 1) {
+      if (region->gray > delta * 2) {
         initialLeaves->insert(region);
       } else {
         if (!region->children->isEmpty()) {
@@ -113,7 +117,7 @@ namespace mser {
 
     PathList *paths = new PathList();
     for (RegionSet::iterator i = initialLeaves->begin(), e = initialLeaves->end(); i != e; ++i) {
-      paths->append(new Path(*i, 0, delta + 1, delta * 2 + 1));
+      paths->append(new Path(*i, 0, delta, delta * 2));
     }
 
     // TODO(hermannloose): Change to DEBUG level.
@@ -214,9 +218,17 @@ namespace mser {
       upper = toInsert;
     }
 
+    mser::Region *childRegion = initialLeaf;
+    while (childRegion->children->size() == 1) {
+      childRegion = *childRegion->children->begin();
+      path->append(childRegion);
+    }
+
     assert(upper);
     assert(current);
     assert(lower);
+
+    assert(lowerGray - currentGray == currentGray - upperGray);
   }
 
   Path::Path(Path& other) :
@@ -230,6 +242,8 @@ namespace mser {
     assert(upper);
     assert(current);
     assert(lower);
+
+    assert(lowerGray - currentGray == currentGray - upperGray);
   }
 
   Path::~Path() {
@@ -287,27 +301,29 @@ namespace mser {
         // Stay in this region.
         childPaths->append(this);
       }
+    }
 
-      for (PathList::iterator i = childPaths->begin(), e = childPaths->end(); i != e; ++i) {
-        Path *p = (*i);
+    for (PathList::iterator i = childPaths->begin(), e = childPaths->end(); i != e; ++i) {
+      Path *p = (*i);
 
-        mser::Region *nextCurrent = p->path->at(p->path->indexOf(p->current) + 1);
-        if (nextCurrent->gray - p->currentGray == 1) {
-          // Step down to next region.
-          p->current = nextCurrent;
-        }
-
-        mser::Region *nextUpper = p->path->at(p->path->indexOf(p->upper) + 1);
-        if (nextUpper->gray - p->upperGray == 1) {
-          // Step down to next region.
-          p->upper = nextUpper;
-          // TODO(hermannloose): Remove unneeded prefix of path.
-        }
-
-        ++p->lowerGray;
-        ++p->currentGray;
-        ++p->upperGray;
+      mser::Region *nextCurrent = p->path->at(p->path->indexOf(p->current) + 1);
+      if (nextCurrent->gray - p->currentGray == 1) {
+        // Step down to next region.
+        p->current = nextCurrent;
       }
+
+      mser::Region *nextUpper = p->path->at(p->path->indexOf(p->upper) + 1);
+      if (nextUpper->gray - p->upperGray == 1) {
+        // Step down to next region.
+        p->upper = nextUpper;
+        // TODO(hermannloose): Remove unneeded prefix of path.
+      }
+
+      ++p->lowerGray;
+      ++p->currentGray;
+      ++p->upperGray;
+
+      assert(p->lowerGray - p->currentGray == p->currentGray - p->upperGray);
     }
 
     return childPaths;

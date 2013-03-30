@@ -5,6 +5,7 @@
 #include <QMutableVectorIterator>
 
 #include <assert.h>
+#include <climits>
 #include <iostream>
 
 using namespace log4cxx;
@@ -18,6 +19,70 @@ namespace mser {
       qi(qi) {
   }
 
+
+
+  MinimumFinder::MinimumFinder(Path *path, mser::Region *region, double lastQi) :
+      path(path), region(region), lastQi(lastQi), foundMinimum(false) {
+
+  }
+
+  bool MinimumFinder::hasMinimum() {
+    return foundMinimum;
+  }
+
+  MinimumResult* MinimumFinder::getMinimum() {
+    return new MinimumResult(region, lastQi);
+  }
+
+  FinderList* MinimumFinder::descend() {
+    assert(!foundMinimum);
+
+    FinderList *childFinders = new FinderList();
+
+    // TODO(hermannloose): Clean up control flow.
+    if (path->atLeaf()) {
+      this->foundMinimum = true;
+
+      LOG4CXX_DEBUG(logger, "Terminating at leaf with " << lastQi);
+
+      childFinders->append(this);
+
+      return childFinders;
+    }
+
+    PathList *childPaths = path->descend();
+
+    assert(childPaths->size() > 0);
+
+    for (PathList::iterator i = childPaths->begin(), e = childPaths->end(); i != e; ++i) {
+      Path *childPath = *i;
+      // TODO(hermannloose): Optimize for first child path.
+      MinimumFinder *childFinder = new MinimumFinder(childPath, region, lastQi);
+      double qi = childPath->stability();
+      assert(qi >= 0);
+      if (qi <= childFinder->lastQi) {
+        childFinder->region = childPath->currentRegion();
+        childFinder->lastQi = qi;
+
+        LOG4CXX_TRACE(logger, "Region " << region << ", qi: " << qi);
+      } else {
+        childFinder->foundMinimum = true;
+
+        LOG4CXX_DEBUG(logger, "Found minimum of " << qi);
+      }
+
+      childFinders->append(childFinder);
+    }
+
+    delete childPaths;
+
+    LOG4CXX_TRACE(logger, childFinders->size() << " child finders");
+
+    return childFinders;
+  }
+
+
+
   RegionWalker::RegionWalker(mser::Region *start, int delta) :
       start(start), delta(delta) {
   }
@@ -26,7 +91,62 @@ namespace mser {
   }
 
   ResultSet* RegionWalker::findMSER() {
+    RegionSet *initialLeaves = new RegionSet();
+    RegionList *toProcess = new RegionList();
+    toProcess->append(start);
+
+    while (!toProcess->isEmpty()) {
+      mser::Region *region = toProcess->takeFirst();
+      if (region->gray > delta * 2 + 1) {
+        initialLeaves->insert(region);
+      } else {
+        if (!region->children->isEmpty()) {
+          for (RegionSet::iterator i = region->children->begin(), e = region->children->end();
+              i != e; ++i) {
+            toProcess->append(*i);
+          }
+        }
+      }
+    }
+
+    delete toProcess;
+
+    PathList *paths = new PathList();
+    for (RegionSet::iterator i = initialLeaves->begin(), e = initialLeaves->end(); i != e; ++i) {
+      paths->append(new Path(*i, 0, delta + 1, delta * 2 + 1));
+    }
+
+    // TODO(hermannloose): Change to DEBUG level.
+    LOG4CXX_INFO(logger, "Found " << paths->size() << " initial paths");
+
+    FinderList *finders = new FinderList();
+    for (PathList::iterator i = paths->begin(), e = paths->end(); i != e; ++i) {
+      Path *path = *i;
+      finders->append(new MinimumFinder(path, path->currentRegion(), (double) INT_MAX));
+    }
+
+    delete paths;
+
     ResultSet *results = new ResultSet();
+
+    while (!finders->isEmpty()) {
+      LOG4CXX_TRACE(logger, finders->size() << " finders");
+
+      MinimumFinder *finder = finders->takeFirst();
+      if (finder->hasMinimum()) {
+        results->insert(finder->getMinimum());
+
+        LOG4CXX_DEBUG(logger, "Found minimum");
+      } else {
+        LOG4CXX_TRACE(logger, "Descending");
+
+        FinderList* childFinders = finder->descend();
+        finders->append(*childFinders);
+        delete childFinders;
+      }
+    }
+
+    LOG4CXX_INFO(logger, "Found " << results->size() << " MSERs");
 
     return results;
   }
@@ -35,7 +155,12 @@ namespace mser {
 
   Path::Path(mser::Region *initialLeaf, unsigned int upperGray, unsigned int currentGray,
       unsigned int lowerGray) :
-      upperGray(upperGray), currentGray(currentGray), lowerGray(lowerGray) {
+      upper(NULL),
+      upperGray(upperGray),
+      current(NULL),
+      currentGray(currentGray),
+      lower(NULL),
+      lowerGray(lowerGray) {
     assert(initialLeaf->gray >= lowerGray);
 
     path = new RegionList();
@@ -83,27 +208,36 @@ namespace mser {
         lower = toInsert;
       }
     }
+
+    // Images might not have completely black region to start with.
+    if (upper == NULL) {
+      upper = toInsert;
+    }
+
+    assert(upper);
+    assert(current);
+    assert(lower);
   }
 
-  Path::Path(Path& other) {
-    path = new RegionList(*other.path);
-
-    upper = other.upper;
-    upperGray = other.upperGray;
-
-    current = other.current;
-    currentGray = other.currentGray;
-
-    lower = other.lower;
-    lowerGray = other.lowerGray;
+  Path::Path(Path& other) :
+      path(new RegionList(*other.path)),
+      upper(other.upper),
+      upperGray(other.upperGray),
+      current(other.current),
+      currentGray(other.currentGray),
+      lower(other.lower),
+      lowerGray(other.lowerGray) {
+    assert(upper);
+    assert(current);
+    assert(lower);
   }
 
   Path::~Path() {
     delete path;
   }
 
-  PathVector* Path::descend() {
-    PathVector *childPaths = new PathVector();
+  PathList* Path::descend() {
+    PathList *childPaths = new PathList();
 
     assert(lowerGray < 255);
 
@@ -118,10 +252,9 @@ namespace mser {
       }
       childPaths->append(this);
     } else {
-      // We are at a branch.
-      assert(lower->children->size() > 1);
-
+      // We are at a branch or leaf.
       if (lower->nextHigherGray() - lowerGray == 1) {
+        assert(lower->children->size() > 1);
         // Step down to next region.
         childPaths->reserve(lower->children->size());
 
@@ -143,7 +276,7 @@ namespace mser {
           }
 
           while (childRegion->children->size() == 1) {
-            // Fill child path until next branch.
+            // Fill child path until next branch or leaf.
             childRegion = *childRegion->children->begin();
             childPath->path->append(childRegion);
           }
@@ -155,7 +288,7 @@ namespace mser {
         childPaths->append(this);
       }
 
-      for (PathVector::iterator i = childPaths->begin(), e = childPaths->end(); i != e; ++i) {
+      for (PathList::iterator i = childPaths->begin(), e = childPaths->end(); i != e; ++i) {
         Path *p = (*i);
 
         mser::Region *nextCurrent = p->path->at(p->path->indexOf(p->current) + 1);
@@ -214,7 +347,21 @@ namespace mser {
   }
 
   double Path::stability() {
+    assert(upper->size >= 0);
+    assert(current->size >= 0);
+    assert(lower->size >= 0);
+
+    assert(upper->size >= lower->size);
+
     return (upper->size - lower->size) / (double) current->size;
+  }
+
+  mser::Region* Path::currentRegion() {
+    return current;
+  }
+
+  bool Path::atLeaf() {
+    return lower->children->size() == 0;
   }
 
 }

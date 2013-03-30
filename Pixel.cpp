@@ -92,6 +92,7 @@ namespace mser {
     }
 
     other->size += size;
+    assert(other->size >= 0);
   }
 
   void Region::groupUnder(Region *parent) {
@@ -102,6 +103,7 @@ namespace mser {
     this->parent = parent;
     parent->children->insert(this);
     parent->size += size;
+    assert(parent->size >= 0);
     invalidateRootRegionCache();
   }
 
@@ -154,6 +156,7 @@ namespace mser {
         }
         cachedHigherGray = minHigherGray;
       } else {
+        LOG4CXX_WARN(logger, "No higher gray found, using own gray!");
         // TODO(hermannloose): Revisit whether this is a good fallback.
         cachedHigherGray = gray;
       }
@@ -170,6 +173,7 @@ namespace mser {
       if (parent) {
         cachedLowerGray = parent->gray;
       } else {
+        LOG4CXX_WARN(logger, "No lower gray found, using own gray!");
         // TODO(hermannloose): Revisit whether this is a good fallback.
         cachedLowerGray = gray;
       }

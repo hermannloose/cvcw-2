@@ -40,9 +40,10 @@ void paintRegionTree(mser::Region *root, QImage *original);
 void mergeRegions(mser::Region *merge, mser::Region *into);
 
 LoggerPtr logger(Logger::getLogger("mser"));
+LoggerPtr MinimumFinder::logger(Logger::getLogger("mser.MinimumFinder"));
+LoggerPtr Path::logger(Logger::getLogger("mser.Path"));
 LoggerPtr mser::Region::logger(Logger::getLogger("mser.Region"));
 LoggerPtr RegionWalker::logger(Logger::getLogger("mser.RegionWalker"));
-LoggerPtr Path::logger(Logger::getLogger("mser.Path"));
 
 int main(int argc, char *argv[]) {
   short delta = 5;
@@ -236,6 +237,7 @@ RegionSet* placePixels(PixelVector *sortedPixels, int width, int height) {
       pixel->region = region;
       region->pixels->append(pixel);
       region->size += 1;
+      assert(region->size >= 0);
 
       for (RegionSet::iterator ri = toGroup->begin(), re = toGroup->end(); ri != re; ++ri) {
         (*ri)->groupUnder(region);

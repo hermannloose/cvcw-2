@@ -6,9 +6,12 @@
 
 namespace mser {
 
+  class MinimumResult;
+  class MinimumFinder;
   class Path;
   class RegionWalker;
 
+  typedef QList<Path*> PathList;
   typedef QVector<Path*> PathVector;
 
   class MinimumResult {
@@ -19,6 +22,27 @@ namespace mser {
   };
 
   typedef QSet<MinimumResult*> ResultSet;
+
+  typedef QList<MinimumFinder*> FinderList;
+
+  class MinimumFinder {
+    public:
+      MinimumFinder(Path *path, mser::Region *region, double lastQi);
+
+      bool hasMinimum();
+      MinimumResult* getMinimum();
+
+      FinderList* descend();
+
+      static log4cxx::LoggerPtr logger;
+
+    private:
+      Path *path;
+      // TODO(hermannloose): Make sure this is initialized.
+      mser::Region *region;
+      double lastQi;
+      bool foundMinimum;
+  };
 
   class RegionWalker {
 
@@ -42,9 +66,12 @@ namespace mser {
       Path(Path& other);
       ~Path();
 
-      PathVector* descend();
+      PathList* descend();
       void ascend();
       double stability();
+      mser::Region* currentRegion();
+
+      bool atLeaf();
 
       static log4cxx::LoggerPtr logger;
 

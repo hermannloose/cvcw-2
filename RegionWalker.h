@@ -12,8 +12,6 @@ namespace mser {
   class Path;
   class RegionWalker;
 
-  typedef QVector<Path*> PathVector;
-
   class MinimumResult {
     public:
       MinimumResult(mser::Region *region, double qi);

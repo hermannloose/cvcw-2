@@ -64,7 +64,7 @@ namespace mser {
       MinimumFinder *childFinder = new MinimumFinder(childPath, region, lastQi);
       double qi = childPath->stability();
       assert(qi >= 0);
-      if (qi <= childFinder->lastQi) {
+      if (qi <= childFinder->lastQi - 0.01) {
         childFinder->region = childPath->currentRegion();
         childFinder->lastQi = qi;
 
@@ -101,7 +101,7 @@ namespace mser {
 
     while (!toProcess->isEmpty()) {
       mser::Region *region = toProcess->takeFirst();
-      if (region->gray > delta * 2) {
+      if (region->gray >= min(delta * 2, 255)) {
         initialLeaves->insert(region);
       } else {
         if (!region->children->isEmpty()) {
@@ -117,7 +117,7 @@ namespace mser {
 
     PathList *paths = new PathList();
     for (RegionSet::iterator i = initialLeaves->begin(), e = initialLeaves->end(); i != e; ++i) {
-      paths->append(new Path(*i, 0, delta, delta * 2));
+      paths->append(new Path(*i, 0, min(delta, 255), min(delta * 2, 255)));
     }
 
     // TODO(hermannloose): Change to DEBUG level.
@@ -228,7 +228,7 @@ namespace mser {
     assert(current);
     assert(lower);
 
-    assert(lowerGray - currentGray == currentGray - upperGray);
+    //assert(lowerGray - currentGray == currentGray - upperGray);
   }
 
   Path::Path(Path& other) :
@@ -243,7 +243,7 @@ namespace mser {
     assert(current);
     assert(lower);
 
-    assert(lowerGray - currentGray == currentGray - upperGray);
+    //assert(lowerGray - currentGray == currentGray - upperGray);
   }
 
   Path::~Path() {
@@ -253,54 +253,60 @@ namespace mser {
   PathList* Path::descend() {
     PathList *childPaths = new PathList();
 
-    assert(lowerGray < 255);
+    //assert(lowerGray < 255);
 
     // TODO(hermannloose): Add a method to check that before calling.
-    assert(lower->children->size() > 0);
+    //assert(lower->children->size() > 0);
 
-    if (path->indexOf(lower) < path->size() - 1) {
-      // We have chosen a path before, use it.
-      mser::Region *nextLower = path->at(path->indexOf(lower) + 1);
-      if (nextLower->gray - lowerGray == 1) {
-        lower = nextLower;
-      }
-      childPaths->append(this);
-    } else {
-      // We are at a branch or leaf.
-      if (lower->nextHigherGray() - lowerGray == 1) {
-        assert(lower->children->size() > 1);
-        // Step down to next region.
-        childPaths->reserve(lower->children->size());
-
-        for (RegionSet::iterator i = lower->children->begin(), e = lower->children->end();
-            i != e; ++i) {
-          Path *childPath;
-          mser::Region *childRegion = *i;
-
-          if (childRegion == *lower->children->begin()) {
-            childPath = this;
-          } else {
-            childPath = new Path(*this);
-          }
-
-          childPath->path->append(childRegion);
-
-          if (childRegion->gray - lowerGray == 1) {
-            childPath->lower = childRegion;
-          }
-
-          while (childRegion->children->size() == 1) {
-            // Fill child path until next branch or leaf.
-            childRegion = *childRegion->children->begin();
-            childPath->path->append(childRegion);
-          }
-
-          childPaths->append(childPath);
+    if (lower->children->size() > 0) {
+      if (path->indexOf(lower) < path->size() - 1) {
+        // We have chosen a path before, use it.
+        mser::Region *nextLower = path->at(path->indexOf(lower) + 1);
+        if (nextLower->gray - lowerGray == 1) {
+          lower = nextLower;
         }
-      } else {
-        // Stay in this region.
         childPaths->append(this);
+      } else {
+        // We are at a branch or leaf.
+        if (lower->nextHigherGray() - lowerGray == 1) {
+          assert(lower->children->size() > 1);
+          // Step down to next region.
+          childPaths->reserve(lower->children->size());
+
+          for (RegionSet::iterator i = lower->children->begin(), e = lower->children->end();
+              i != e; ++i) {
+            Path *childPath;
+            mser::Region *childRegion = *i;
+
+            if (childRegion == *lower->children->begin()) {
+              childPath = this;
+            } else {
+              childPath = new Path(*this);
+            }
+
+            childPath->path->append(childRegion);
+
+            if (childRegion->gray - lowerGray == 1) {
+              childPath->lower = childRegion;
+            }
+
+            while (childRegion->children->size() == 1) {
+              // Fill child path until next branch or leaf.
+              childRegion = *childRegion->children->begin();
+              childPath->path->append(childRegion);
+            }
+
+            childPaths->append(childPath);
+          }
+        } else {
+          // Stay in this region.
+          childPaths->append(this);
+        }
       }
+    } else {
+      childPaths->append(this);
+      // TODO(hermannloose): Dirty hack to cancel effect below.
+      --lowerGray;
     }
 
     for (PathList::iterator i = childPaths->begin(), e = childPaths->end(); i != e; ++i) {
@@ -323,7 +329,7 @@ namespace mser {
       ++p->currentGray;
       ++p->upperGray;
 
-      assert(p->lowerGray - p->currentGray == p->currentGray - p->upperGray);
+      //assert(p->lowerGray - p->currentGray == p->currentGray - p->upperGray);
     }
 
     return childPaths;
@@ -377,7 +383,8 @@ namespace mser {
   }
 
   bool Path::atLeaf() {
-    return lower->children->size() == 0;
+    return current->children->size() == 0;
+    //return lower->children->size() == 0;
   }
 
 }

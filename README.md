@@ -1,6 +1,13 @@
 # Maximally Stable Extremal Regions (MSER) #
 
-to be built
+`-d` *value*
+> Set the delta parameter for finding MSERs.
+`--mser_rgb`
+> Set the RGB value used for coloring MSERs.
+`--mser_alpha`
+> Set the alpha value used for coloring MSERs.
+`--mser_random_color`
+> Use a random RGB color for each MSER.
 
 ---
 

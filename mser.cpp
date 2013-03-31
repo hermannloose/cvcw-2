@@ -15,6 +15,8 @@
 
 #include <assert.h>
 #include <algorithm>
+#include <cstdio>
+#include <getopt.h>
 #include <iostream>
 #include <map>
 #include <sstream>
@@ -29,11 +31,23 @@ using namespace log4cxx::helpers;
 
 using namespace std;
 
-static char *opts = "d:r";
+static int paintDebugRegions = 0;
+
+static int mserRandomColor = 0;
+
+static char *opts = "d:";
+
+static struct option long_options[] = {
+  { "paint_regions", no_argument, &paintDebugRegions, 1 },
+  { "mser_random_color", no_argument, &mserRandomColor, 1 },
+  { "mser_rgb", required_argument, 0, 'c' },
+  { "mser_alpha", required_argument, 0, 'a' },
+  { 0, 0, 0, 0 }
+};
 
 RegionSet* placePixels(PixelVector *sortedPixels, int width, int height);
 
-void paintRegion(mser::Region *region, QImage *output);
+void paintRegion(mser::Region *region, QImage *output, unsigned long color);
 
 void paintRegionTree(mser::Region *root, QImage *original);
 
@@ -45,25 +59,36 @@ LoggerPtr Path::logger(Logger::getLogger("mser.Path"));
 LoggerPtr mser::Region::logger(Logger::getLogger("mser.Region"));
 LoggerPtr RegionWalker::logger(Logger::getLogger("mser.RegionWalker"));
 
+static unsigned long mserColor = 0;
+static unsigned long mserRGB = 0xff0000;
+static unsigned long mserAlpha = 255;
+
 int main(int argc, char *argv[]) {
+  int option_index = 0;
+
   short delta = 5;
-  bool paintDebugRegions = false;
   string *inputFilename;
   string *outputFilename;
 
   char c;
-  while ((c = getopt(argc, argv, opts)) != -1) {
+  while ((c = getopt_long(argc, argv, opts, long_options, &option_index)) != -1) {
     switch (c) {
+      case 'c':
+        mserRGB = ((unsigned long) strtol(optarg, NULL, 16)) % 0x1000000;
+        break;
+      case 'a':
+        mserAlpha = ((unsigned long) strtol(optarg, NULL, 16)) % 0x100;
+        break;
       case 'd':
         delta = atoi(optarg);
-        break;
-      case 'r':
-        paintDebugRegions = true;
         break;
       default:
         break;
     }
   }
+
+  mserColor |= mserAlpha << 24;
+  mserColor |= mserRGB;
 
   if (optind < argc) {
     inputFilename = new string(argv[optind]);
@@ -98,6 +123,13 @@ int main(int argc, char *argv[]) {
   LOG4CXX_INFO(logger, "Got image [" << width << "x" << height << "] = "
       << width * height << " pixels");
   LOG4CXX_INFO(logger, "Using delta of " << delta);
+  char hexString[32];
+  snprintf(hexString, 32, "0x%X", mserColor);
+  if (mserRandomColor) {
+    LOG4CXX_INFO(logger, "Coloring MSERs randomly");
+  } else {
+    LOG4CXX_INFO(logger, "Using " << hexString << " for coloring MSERs");
+  }
 
   PixelVector *pixels = new PixelVector();
   pixels->reserve(width * height);
@@ -118,7 +150,7 @@ int main(int argc, char *argv[]) {
 
   RegionSet *regionLeaves = placePixels(sortedPixels, width, height);
 
-  QImage output = input.convertToFormat(QImage::Format_RGB32);
+  QImage output = input.convertToFormat(QImage::Format_ARGB32);
 
   for (RegionSet::iterator i = regionLeaves->begin(), e = regionLeaves->end(); i != e; ++i) {
     LOG4CXX_DEBUG(logger, "Setting up region walk for region " << *i);
@@ -129,9 +161,22 @@ int main(int argc, char *argv[]) {
     ResultSet *results = walker->findMSER();
     LOG4CXX_INFO(logger, "Painting MSERs");
 
+    srand(0);
+
     for (ResultSet::iterator ri = results->begin(), re = results->end(); ri != re; ++ri) {
       LOG4CXX_DEBUG(logger, "Painting MSER " << *ri << " of size " << (*ri)->region->size);
-      paintRegion((*ri)->region, &output);
+
+      unsigned long color = 0;
+      if (mserRandomColor) {
+        color |= mserAlpha << 24;
+        color |= (rand() % 255) << 16;
+        color |= (rand() % 255) << 8;
+        color |= (rand() % 255);
+      } else {
+        color |= mserRGB;
+      }
+
+      paintRegion((*ri)->region, &output, color);
     }
 
     delete walker;
@@ -152,8 +197,7 @@ int main(int argc, char *argv[]) {
   return 0;
 }
 
-void paintRegion(mser::Region *region, QImage *output) {
-  int depth = output->depth();
+void paintRegion(mser::Region *region, QImage *output, unsigned long color) {
   RegionSet *toPaint = new RegionSet();
   toPaint->insert(region);
 
@@ -164,7 +208,7 @@ void paintRegion(mser::Region *region, QImage *output) {
 
     for (PixelVector::iterator pi = r->pixelsBegin(), pe = r->pixelsEnd();
         pi != pe; ++pi) {
-      output->setPixel((*pi)->x, (*pi)->y, 0xffff0000);
+      output->setPixel((*pi)->x, (*pi)->y, color);
     }
   }
 }
@@ -295,7 +339,7 @@ void paintRegionTree(mser::Region *root, QImage *original) {
       continue;
     }
 
-    QImage output = original->convertToFormat(QImage::Format_RGB32);
+    QImage output = original->convertToFormat(QImage::Format_ARGB32);
 
     for (RegionSet::iterator ri = toPaint[i]->begin(), re = toPaint[i]->end(); ri != re; ++ri) {
       unsigned long color = 0xff000000;

@@ -1,7 +1,10 @@
 #pragma once
 
+#include "Globals.h"
+
 #include "Path.h"
 #include "Pixel.h"
+#include "Region.h"
 
 #include <log4cxx/logger.h>
 

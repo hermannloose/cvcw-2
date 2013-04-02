@@ -1,5 +1,6 @@
 #include "Pixel.h"
 #include "PixelImage.h"
+#include "Region.h"
 #include "RegionWalker.h"
 
 #include <log4cxx/logger.h>

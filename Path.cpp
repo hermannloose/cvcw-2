@@ -1,5 +1,7 @@
 #include "Path.h"
 
+#include "Region.h"
+
 #include <assert.h>
 
 namespace mser {

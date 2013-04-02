@@ -168,8 +168,8 @@ int main(int argc, char *argv[]) {
       LOG4CXX_DEBUG(logger, "Painting MSER " << *ri << " of size " << (*ri)->region->size);
 
       unsigned long color = 0;
+      color |= mserAlpha << 24;
       if (mserRandomColor) {
-        color |= mserAlpha << 24;
         color |= (rand() % 255) << 16;
         color |= (rand() % 255) << 8;
         color |= (rand() % 255);
